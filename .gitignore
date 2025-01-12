@@ -1,0 +1,7 @@
+yaml-cpp/
+build/
+yolov8seg/models/
+debug/saved_image/
+temp/
+videos/input/
+videos/output/
