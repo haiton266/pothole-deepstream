@@ -1,12 +1,12 @@
 source:
-  # filesrc:
-  #   location: videos/input/pedestrian.mp4
-  webcam:
-    device: /dev/video0
+  filesrc:
+   location: videos/input/thicong4.mp4
+  # webcam:
+  #   device: /dev/video0
 
 nvinfer:
-  # config-file-path: configs/config_infer_primary_yoloV8_seg.txt
-  config-file-path: temp/dstest1_pgie_config.txt
+  config-file-path: configs/config_infer_primary_yoloV8.txt
+  # config-file-path: temp/dstest1_pgie_config.txt
 nvtracker:
   config-file-path: configs/tracker_config.txt
 

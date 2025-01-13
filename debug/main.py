@@ -2,7 +2,7 @@ import cv2
 import os
 
 # Replace with your RTSP stream URL
-rtsp_url = 'rtsp://0.0.0.0:8080/stream'
+rtsp_url = 'rtsp://localhost:8080/stream'
 
 # Output directory to save images
 output_dir = 'debug/saved_images'
@@ -27,7 +27,7 @@ try:
 
         # Save frame at specified intervals
         if frame_count % save_interval == 0:
-            image_path = os.path.join(output_dir, f'frame_{frame_count}.jpg')
+            image_path = os.path.join(output_dir, f"frame_{frame_count}.jpg")
             cv2.imwrite(image_path, frame)
             print(f"Saved {image_path}")
 
