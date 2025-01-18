@@ -10,8 +10,10 @@ void setup_file_sink_bin(FileSinkBin *file_sink_bin, SinkBin *sink_bin, const st
     file_sink_bin->qtmux = gst_element_factory_make("qtmux", "qtmux");
     file_sink_bin->filesink = gst_element_factory_make("filesink", "filesink");
 
-    g_object_set(G_OBJECT(file_sink_bin->filesink), 
-		"location", location.c_str(), 
+    g_object_set(G_OBJECT(file_sink_bin->filesink),
+		"location", location.c_str(),
+		"sync", FALSE,
+		"async", FALSE,
 		NULL);
 
     gst_bin_add_many(GST_BIN(file_sink_bin->bin),

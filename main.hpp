@@ -46,7 +46,7 @@ class ProcessBin
 public:
     GstElement *bin;
     GstElement *nvinfer;
-    // GstElement *nvtracker;
+    GstElement *nvtracker;
     GstElement *nvvidconv;
     GstElement *nvdsosd;
     GstElement *nvvidconv2;

@@ -11,3 +11,5 @@ yolov8/nvdsinfer_custom_impl_Yolo_yolov8/*.so
 yolov8/nvdsinfer_custom_impl_Yolo_seg/*.o
 yolov8/nvdsinfer_custom_impl_Yolo_seg/*.so
 yolov8/nvdsinfer_custom_impl_Yolo_yolov8/layers/*.o
+yaml-cp
+.venv/

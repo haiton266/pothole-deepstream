@@ -1,5 +1,6 @@
 #include <gst/gst.h>
 #include "main.hpp"
+#include <time.h>
 #include <yaml-cpp/yaml.h>
 #include <chrono>
 #include "gstnvdsmeta.h"
@@ -89,8 +90,28 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
                               G_GNUC_UNUSED gpointer u_data)
 {
     static int frame_num = 0;
+    static time_t start_time = 0;
+    static int fps_frame_count = 0;
+
+    if (start_time == 0)
+    {
+        start_time = time(NULL);
+    }
 
     frame_num++; // Increment once per batch
+    fps_frame_count++; // Increment FPS frame count
+
+    time_t current_time = time(NULL);
+    double elapsed_time = difftime(current_time, start_time);
+
+    if (elapsed_time >= 1.0)
+    {
+        double fps = fps_frame_count / elapsed_time;
+        g_print("FPS: %.2f\n", fps);
+        fps_frame_count = 0;
+        start_time = current_time;
+    }
+
     if (frame_num % 1 == 0)
         g_print("Frame number at sink pad of nvdsosd: %d\n", frame_num);
 
@@ -314,9 +335,9 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     process_bin->nvinfer = gst_element_factory_make("nvinfer", "nv-infer");
 
     // This is for tracker
-    // YAML::Node tracker = config["nvtracker"];
-    // string tracker_config_file_path = tracker["config-file-path"].as<string>();
-    // process_bin->nvtracker = gst_element_factory_make("nvtracker", "nvtracker");
+    YAML::Node tracker = config["nvtracker"];
+    string tracker_config_file_path = tracker["config-file-path"].as<string>();
+    process_bin->nvtracker = gst_element_factory_make("nvtracker", "nvtracker");
 
     // Define the rest of the elements
     process_bin->nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-convert");
@@ -326,23 +347,22 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
 
     // Set properties
     g_object_set(G_OBJECT(process_bin->nvinfer), "config-file-path", config_file_path.c_str(), NULL);
-    // g_object_set(process_bin->nvdsosd, "display-mask", 1, NULL);
-    // if (!set_tracker_properties(process_bin->nvtracker, (gchar *)tracker_config_file_path.c_str()))
-    // {
-    //     g_printerr("Failed to set tracker properties. Exiting.\n");
-    //     return;
-    // }
+    if (!set_tracker_properties(process_bin->nvtracker, (gchar *)tracker_config_file_path.c_str()))
+    {
+         g_printerr("Failed to set tracker properties. Exiting.\n");
+         return;
+    }
 
     gst_bin_add_many(GST_BIN(process_bin->bin),
                      process_bin->nvinfer,
-                    //  process_bin->nvtracker,
+                     process_bin->nvtracker,
                      process_bin->nvvidconv,
                      process_bin->nvdsosd,
                      process_bin->nvvidconv2,
                      process_bin->encoder,
                      NULL);
     gst_element_link_many(process_bin->nvinfer,
-                        //   process_bin->nvtracker,
+                          process_bin->nvtracker,
                           process_bin->nvvidconv,
                           process_bin->nvdsosd,
                           process_bin->nvvidconv2,
@@ -447,7 +467,7 @@ int main(int argc, char *argv[])
 
     g_pipeline_program.pipeline = gst_pipeline_new("pipeline-0");
 
-    
+
     // Set up the SIGINT handler
     signal(SIGINT, handle_sigint);
 
