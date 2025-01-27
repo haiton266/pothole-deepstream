@@ -1,4 +1,5 @@
 .vscode/
+server_local/__pycache__
 yaml-cpp/*
 build/
 yolov8/models/*.engine
