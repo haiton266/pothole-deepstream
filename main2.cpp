@@ -3,6 +3,9 @@
 #include <time.h>
 #include <yaml-cpp/yaml.h>
 #include <chrono>
+#include <unordered_map>
+#include <queue>
+#include <string>
 #include "gstnvdsmeta.h"
 #include "file_source_bin.hpp"
 #include "file_sink_bin.hpp"
@@ -189,6 +192,79 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
+const size_t MAX_IDS = 100;
+
+static GstPadProbeReturn
+nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
+{
+    static std::unordered_map<int, bool> recent_ids;
+    static std::queue<int> id_queue;
+
+    GstBuffer *buf = GST_PAD_PROBE_INFO_BUFFER(info);
+    if (!buf)
+        return GST_PAD_PROBE_OK;
+
+    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+    if (!batch_meta)
+        return GST_PAD_PROBE_OK;
+
+    for (NvDsMetaList *frame_list = batch_meta->frame_meta_list;
+         frame_list != nullptr;
+         frame_list = frame_list->next)
+    {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(frame_list->data);
+        std::string image_path = "/home/jetson/" + std::to_string(frame_meta->frame_num) + ".jpg";
+
+        if (!frame_meta || !frame_meta->obj_meta_list)
+            continue;
+
+        NvDsDisplayMeta *display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
+        if (!display_meta)
+            continue;
+
+        bool is_save_and_pub = false;
+        for (NvDsMetaList *obj_list = frame_meta->obj_meta_list;
+             obj_list != nullptr;
+             obj_list = obj_list->next)
+        {
+            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
+            if (!obj_meta)
+                continue;
+
+            int object_id = obj_meta->object_id;
+
+            // Nếu object_id đã tồn tại, bỏ qua
+            if (recent_ids.find(object_id) != recent_ids.end())
+                continue;
+
+            // Thêm ID mới vào map và queue
+            recent_ids[object_id] = true;
+            id_queue.push(object_id);
+
+            // Nếu số lượng ID vượt quá MAX_IDS, xóa ID lâu nhất
+            if (id_queue.size() > MAX_IDS)
+            {
+                int old_id = id_queue.front();
+                id_queue.pop();
+                recent_ids.erase(old_id);
+            }
+
+            is_save_and_pub = true;
+            strncpy(obj_meta->obj_label, image_path.c_str(), sizeof(obj_meta->obj_label) - 1);
+            obj_meta->obj_label[sizeof(obj_meta->obj_label) - 1] = '\0';
+        }
+
+        if (is_save_and_pub)
+        {
+            ;// Lưu hình ảnh tại đây nếu cần
+        }
+
+        nvds_add_display_meta_to_frame(frame_meta, display_meta);
+    }
+
+    return GST_PAD_PROBE_OK;
+}
+
 static gboolean
 set_tracker_properties(GstElement *nvtracker, gchar *tracker_config_file)
 {
@@ -364,7 +440,7 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
                           process_bin->nvdsosd,
                           NULL);
 
-    // Attach pad probe to the src pad of nvdsosd
+    // Attach pad probe to the sink pad of nvdsosd
     GstPad *nvdsosd_sink_pad =
         gst_element_get_static_pad(process_bin->nvdsosd, "sink");
     if (!nvdsosd_sink_pad)
@@ -380,6 +456,23 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
                           NULL);
     }
     gst_object_unref(nvdsosd_sink_pad);
+
+    // Attach pad probe to the src pad of nvdsosd
+    GstPad *nvdsosd_src_pad =
+        gst_element_get_static_pad(process_bin->nvdsosd, "src");
+    if (!nvdsosd_src_pad)
+    {
+        g_printerr("Unable to get nvdsosd src pad\n");
+    }
+    else
+    {
+        gst_pad_add_probe(nvdsosd_src_pad,
+                          GST_PAD_PROBE_TYPE_BUFFER,
+                          nvdsosd_src_pad_buffer_probe,
+                          NULL,
+                          NULL);
+    }
+    gst_object_unref(nvdsosd_src_pad);
 
     // Add src ghost pad to process bin
     GstPad *srcpad_nvdsosd = gst_element_get_static_pad(process_bin->nvdsosd, "src");
