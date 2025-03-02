@@ -6,6 +6,8 @@ void setup_file_sink_bin(FileSinkBin *file_sink_bin, SinkBin *sink_bin, const st
     file_sink_bin->bin = gst_bin_new("file-sink-bin");
 
     file_sink_bin->queue = gst_element_factory_make("queue", "queue");
+    file_sink_bin->nvvidconv2 = gst_element_factory_make("nvvideoconvert", "nvvideo-convert-2");
+    file_sink_bin->encoder = gst_element_factory_make("nvv4l2h264enc", "nvv4l2h264enc");
     file_sink_bin->parser = gst_element_factory_make("h264parse", "h264parse");
     file_sink_bin->qtmux = gst_element_factory_make("qtmux", "qtmux");
     file_sink_bin->filesink = gst_element_factory_make("filesink", "filesink");
@@ -18,12 +20,14 @@ void setup_file_sink_bin(FileSinkBin *file_sink_bin, SinkBin *sink_bin, const st
 
     gst_bin_add_many(GST_BIN(file_sink_bin->bin),
                      file_sink_bin->queue,
+                     file_sink_bin->nvvidconv2,
+                     file_sink_bin->encoder,
                      file_sink_bin->parser,
                      file_sink_bin->qtmux,
                      file_sink_bin->filesink,
                      NULL);
 
-    if (!gst_element_link_many(file_sink_bin->queue, file_sink_bin->parser, file_sink_bin->qtmux, file_sink_bin->filesink, NULL))
+    if (!gst_element_link_many(file_sink_bin->queue, file_sink_bin->nvvidconv2, file_sink_bin->encoder, file_sink_bin->parser, file_sink_bin->qtmux, file_sink_bin->filesink, NULL))
     {
         g_printerr("Elements could not be linked. Exiting.");
         return;

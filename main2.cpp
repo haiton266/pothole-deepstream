@@ -8,6 +8,7 @@
 #include "file_sink_bin.hpp"
 #include "rtsp_sink_bin.hpp"
 #include "webcam_source_bin.hpp"
+#include "message_broken_bin.hpp"
 
 Pipeline g_pipeline_program;
 
@@ -342,8 +343,6 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     // Define the rest of the elements
     process_bin->nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-convert");
     process_bin->nvdsosd = gst_element_factory_make("nvdsosd", "nvdsosd");
-    process_bin->nvvidconv2 = gst_element_factory_make("nvvideoconvert", "nvvideo-convert-2");
-    process_bin->encoder = gst_element_factory_make("nvv4l2h264enc", "nvv4l2h264enc");
 
     // Set properties
     g_object_set(G_OBJECT(process_bin->nvinfer), "config-file-path", config_file_path.c_str(), NULL);
@@ -358,20 +357,12 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
                      process_bin->nvtracker,
                      process_bin->nvvidconv,
                      process_bin->nvdsosd,
-                     process_bin->nvvidconv2,
-                     process_bin->encoder,
                      NULL);
     gst_element_link_many(process_bin->nvinfer,
                           process_bin->nvtracker,
                           process_bin->nvvidconv,
                           process_bin->nvdsosd,
-                          process_bin->nvvidconv2,
                           NULL);
-    if (!gst_element_link(process_bin->nvvidconv2, process_bin->encoder))
-    {
-        g_printerr("Failed to link. Exiting.\n");
-        return;
-    }
 
     // Attach pad probe to the src pad of nvdsosd
     GstPad *nvdsosd_sink_pad =
@@ -391,8 +382,8 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     gst_object_unref(nvdsosd_sink_pad);
 
     // Add src ghost pad to process bin
-    GstPad *srcpad_encoder = gst_element_get_static_pad(process_bin->encoder, "src");
-    process_bin->src_ghost_pad = gst_ghost_pad_new("src", srcpad_encoder);
+    GstPad *srcpad_nvdsosd = gst_element_get_static_pad(process_bin->nvdsosd, "src");
+    process_bin->src_ghost_pad = gst_ghost_pad_new("src", srcpad_nvdsosd);
     gst_pad_set_active(process_bin->src_ghost_pad, TRUE);
     if (!gst_element_add_pad(process_bin->bin, process_bin->src_ghost_pad))
     {
@@ -445,6 +436,9 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
             setup_rtsp_sink_bin(rtsp_sink_bin, sink_bin, it->second["ip"].as<string>(), it->second["port"].as<int>());
         }
     }
+    MessageBroken *msg_broken_bin = new MessageBroken();
+    setup_message_broken(msg_broken_bin, sink_bin);
+
     gst_bin_add(GST_BIN(g_pipeline_program->pipeline), sink_bin->bin);
     g_pipeline_program->sink_bin = sink_bin;
     g_print("Sink node initialized\n");

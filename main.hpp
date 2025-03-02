@@ -49,8 +49,6 @@ public:
     GstElement *nvtracker;
     GstElement *nvvidconv;
     GstElement *nvdsosd;
-    GstElement *nvvidconv2;
-    GstElement *encoder;
     GstPad *src_ghost_pad;
     GstPad *sink_ghost_pad;
 };

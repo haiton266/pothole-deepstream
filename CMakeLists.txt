@@ -1,6 +1,6 @@
-add_subdirectory(yaml-cpp)
+# add_subdirectory(yaml-cpp)
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.2.1)
 
 project(MyGStreamerProject LANGUAGES CXX)
 
@@ -58,8 +58,7 @@ add_executable(
 
 # Link libraries
 target_link_libraries(
-    main2
-    yaml-cpp
+    main2 PRIVATE yaml-cpp
     # ${YAML_CPP_LIBRARIES}
     ${GST_LIBRARIES}
     ${GLIB_LIBRARIES}
@@ -67,6 +66,8 @@ target_link_libraries(
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvds_meta.so
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvdsgst_meta.so
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvdsgst_helper.so
+    ${DEEPSTREAM_LIBRARIES_DIR}/libnvds_batch_jpegenc.so
+    ${DEEPSTREAM_LIBRARIES_DIR}/libnvbufsurface.so
 )
 
 # Compiler options

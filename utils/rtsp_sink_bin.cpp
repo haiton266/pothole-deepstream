@@ -8,6 +8,8 @@ void setup_rtsp_sink_bin(RTSPSinkBin *rtsp_sink_bin, SinkBin *sink_bin, std::str
     rtsp_sink_bin->bin = gst_bin_new("rtsp-sink-bin");
 
     rtsp_sink_bin->queue = gst_element_factory_make("queue", "queue");
+    rtsp_sink_bin->nvvidconv2 = gst_element_factory_make("nvvideoconvert", "nvvideo-convert-2");
+    rtsp_sink_bin->encoder = gst_element_factory_make("nvv4l2h264enc", "nvv4l2h264enc");
     rtsp_sink_bin->rtph264pay = gst_element_factory_make("rtph264pay", "rtph264pay");
     rtsp_sink_bin->udpsink = gst_element_factory_make("udpsink", "udpsink");
 
@@ -18,11 +20,13 @@ void setup_rtsp_sink_bin(RTSPSinkBin *rtsp_sink_bin, SinkBin *sink_bin, std::str
 
     gst_bin_add_many(GST_BIN(rtsp_sink_bin->bin),
                      rtsp_sink_bin->queue,
+                     rtsp_sink_bin->nvvidconv2,
+                     rtsp_sink_bin->encoder,
                      rtsp_sink_bin->rtph264pay,
                      rtsp_sink_bin->udpsink,
                      NULL);
 
-    if (!gst_element_link_many(rtsp_sink_bin->queue, rtsp_sink_bin->rtph264pay, rtsp_sink_bin->udpsink, NULL))
+    if (!gst_element_link_many(rtsp_sink_bin->queue, rtsp_sink_bin->nvvidconv2, rtsp_sink_bin->encoder,rtsp_sink_bin->rtph264pay, rtsp_sink_bin->udpsink, NULL))
     {
         g_printerr("Elements could not be linked. Exiting.");
         return;

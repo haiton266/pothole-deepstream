@@ -11,6 +11,8 @@ class RTSPSinkBin : public SinkBinParent
 public:
     GstElement *bin;
     GstElement *queue;
+    GstElement *nvvidconv2;
+    GstElement *encoder;
     GstElement *rtph264pay;
     GstElement *udpsink;
 };

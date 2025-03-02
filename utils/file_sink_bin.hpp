@@ -11,6 +11,8 @@ class FileSinkBin : public SinkBinParent
 public:
     GstElement *bin;
     GstElement *queue;
+    GstElement *nvvidconv2;
+    GstElement *encoder;
     GstElement *parser;
     GstElement *qtmux;
     GstElement *filesink;
