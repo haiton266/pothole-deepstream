@@ -8,7 +8,7 @@
 #include "file_sink_bin.hpp"
 #include "rtsp_sink_bin.hpp"
 #include "webcam_source_bin.hpp"
-#include "message_broken_bin.hpp"
+#include "message_broker_bin.hpp"
 
 Pipeline g_pipeline_program;
 
@@ -436,8 +436,8 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
             setup_rtsp_sink_bin(rtsp_sink_bin, sink_bin, it->second["ip"].as<string>(), it->second["port"].as<int>());
         }
     }
-    MessageBroken *msg_broken_bin = new MessageBroken();
-    setup_message_broken(msg_broken_bin, sink_bin);
+    MessageBroker *msg_broker_bin = new MessageBroker();
+    setup_message_broker(msg_broker_bin, sink_bin);
 
     gst_bin_add(GST_BIN(g_pipeline_program->pipeline), sink_bin->bin);
     g_pipeline_program->sink_bin = sink_bin;

@@ -57,9 +57,18 @@ class SinkBin
 {
 public:
     GstElement *bin;
-    SinkBinParent *sink_bin;
+    SinkBinParent *msg_broker_bin;
     GstElement *tee;
     GstPad *sink_ghost_pad;
+};
+
+class MessageBroker : public SinkBinParent
+{
+public:
+    GstElement *bin;
+    GstElement *queue;
+    GstElement *nvmsgconv;
+    GstElement *nvmsgbroker;
 };
 
 class Pipeline
@@ -70,6 +79,13 @@ public:
     SinkBin *sink_bin;
     GstElement* pipeline;
 
+    GstElement* get_nvmsgconv() {
+        g_print("Calling get_nvmsgconv()\n");
+        g_print("sink_bin pointer: %p\n", sink_bin);
+        g_print("sink_bin->sink_bin pointer: %p\n", sink_bin->msg_broker_bin);
+        auto msg = static_cast<MessageBroker*>(sink_bin->msg_broker_bin);
+        return msg ? msg->nvmsgconv : nullptr;
+    }
 };
 
 #endif // MAIN_HPP
