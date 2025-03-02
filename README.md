@@ -4,11 +4,11 @@ This repo is used for DUT science research contest. Using Deepstream and target 
 
 ## Installation
 
-Refer for setting up clone by ubuntu: https://www.geeksforgeeks.org/how-to-clone-a-repository-from-gitlab/ 
+Refer for setting up clone by ubuntu: https://www.geeksforgeeks.org/how-to-clone-a-repository-from-gitlab/
 
 ```bash
 git clone git@github.com:haiton266/deepstream-project.git
-``` 
+```
 
 Install extra
 ```bash
@@ -50,3 +50,22 @@ Debug by exporting pipeline image (make sure install graphviz)
 dot -Tpng debug/pipeline.dot -o debug/pipeline.png
 dot -Tpng debug/bin.dot -o debug/bin.png
 ```
+
+---
+#### Overview
+The `kafka_consumer.py` script listens for new pothole detection events from a Kafka topic. Upon receiving an event, it:
+1. Retrieves GPS coordinates.
+2. Reads the associated pothole image.
+3. Sends the data to a cloud server via a REST API for map updates.
+
+#### File Location
+```
+server_local/gps_module/python3/kafka_consumer.py
+```
+
+#### Usage
+To run the script, execute:
+```bash
+sudo python3 kafka_consumer.py
+```
+Note: this code create new thread when subcribe a new pothole
