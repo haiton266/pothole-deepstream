@@ -6,7 +6,11 @@
 #include <unordered_map>
 #include <queue>
 #include <string>
+
 #include "gstnvdsmeta.h"
+#include "nvbufsurface.h"
+#include "nvds_obj_encode.h"
+
 #include "file_source_bin.hpp"
 #include "file_sink_bin.hpp"
 #include "rtsp_sink_bin.hpp"
@@ -195,31 +199,31 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
 const size_t MAX_IDS = 100;
 
 static GstPadProbeReturn
-nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
+nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
 {
     static std::unordered_map<int, bool> recent_ids;
     static std::queue<int> id_queue;
 
-    GstBuffer *buf = GST_PAD_PROBE_INFO_BUFFER(info);
-    if (!buf)
-        return GST_PAD_PROBE_OK;
-
-    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
-    if (!batch_meta)
-        return GST_PAD_PROBE_OK;
-
-    for (NvDsMetaList *frame_list = batch_meta->frame_meta_list;
-         frame_list != nullptr;
-         frame_list = frame_list->next)
+    GstBuffer* buf = (GstBuffer*)info->data;
+    GstMapInfo inmap = GST_MAP_INFO_INIT;
+    if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
     {
-        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(frame_list->data);
-        std::string image_path = "/home/jetson/" + std::to_string(frame_meta->frame_num) + ".jpg";
+        GST_ERROR("input buffer mapinfo failed");
+        return GST_PAD_PROBE_OK;
+    }
+    NvBufSurface* ip_surf = (NvBufSurface*)inmap.data;
+    gst_buffer_unmap(buf, &inmap);
+
+    NvDsMetaList* l_frame = NULL;
+    NvDsBatchMeta* batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+
+    for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+        l_frame = l_frame->next)
+    {
+        NvDsFrameMeta* frame_meta = (NvDsFrameMeta*)(l_frame->data);
+        std::string image_path = "img" + std::to_string(frame_meta->frame_num);
 
         if (!frame_meta || !frame_meta->obj_meta_list)
-            continue;
-
-        NvDsDisplayMeta *display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
-        if (!display_meta)
             continue;
 
         bool is_save_and_pub = false;
@@ -256,11 +260,31 @@ nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data
 
         if (is_save_and_pub)
         {
-            ;// Lưu hình ảnh tại đây nếu cần
-        }
+            NvDsObjectMeta newMeta;
+            newMeta.rect_params.width = frame_meta->source_frame_width;
+            newMeta.rect_params.height = frame_meta->source_frame_height;
+            newMeta.rect_params.top = 0.0f;
+            newMeta.rect_params.left = 0.0f;
 
-        nvds_add_display_meta_to_frame(frame_meta, display_meta);
+            NvDsObjEncUsrArgs userData = { 0 };
+            userData.saveImg = TRUE;
+            userData.attachUsrMeta = FALSE;
+            userData.scaleImg = FALSE;
+            userData.scaledWidth = 0;
+            userData.scaledHeight = 0;
+            userData.objNum = 1;
+            userData.quality = 80; /* Quality */
+            sprintf(userData.fileNameImg, "%s.jpg", image_path.c_str());
+
+            /*Main Function Call */
+            g_print("Before nvds_obj_enc_process\n");
+            nvds_obj_enc_process((NvDsObjEncCtxHandle)ctx, &userData, ip_surf, &newMeta, frame_meta);
+            g_print("After nvds_obj_enc_process\n");
+        }
     }
+    g_print("Before nvds_obj_enc_finish\n");
+    nvds_obj_enc_finish((NvDsObjEncCtxHandle)ctx);
+    g_print("After nvds_obj_enc_finish\n");
 
     return GST_PAD_PROBE_OK;
 }
@@ -457,22 +481,30 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     }
     gst_object_unref(nvdsosd_sink_pad);
 
-    // Attach pad probe to the src pad of nvdsosd
-    GstPad *nvdsosd_src_pad =
-        gst_element_get_static_pad(process_bin->nvdsosd, "src");
-    if (!nvdsosd_src_pad)
+    /*Creat Context for Object Encoding */
+    NvDsObjEncCtxHandle obj_ctx_handle = nvds_obj_enc_create_context();
+    if (!obj_ctx_handle)
     {
-        g_printerr("Unable to get nvdsosd src pad\n");
+        g_print("Unable to create context\n");
+        return;
+    }
+
+    // Attach pad probe to the src pad of nvtracker
+    GstPad *nvtracker_src_pad =
+        gst_element_get_static_pad(process_bin->nvtracker, "src");
+    if (!nvtracker_src_pad)
+    {
+        g_printerr("Unable to get nvtracker src pad\n");
     }
     else
     {
-        gst_pad_add_probe(nvdsosd_src_pad,
+        gst_pad_add_probe(nvtracker_src_pad,
                           GST_PAD_PROBE_TYPE_BUFFER,
-                          nvdsosd_src_pad_buffer_probe,
-                          NULL,
+                          nvtracker_src_pad_buffer_probe,
+                          (gpointer)obj_ctx_handle,
                           NULL);
     }
-    gst_object_unref(nvdsosd_src_pad);
+    gst_object_unref(nvtracker_src_pad);
 
     // Add src ghost pad to process bin
     GstPad *srcpad_nvdsosd = gst_element_get_static_pad(process_bin->nvdsosd, "src");
