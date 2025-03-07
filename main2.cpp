@@ -18,7 +18,8 @@
 #include "message_broker_bin.hpp"
 
 Pipeline g_pipeline_program;
-
+const int INTERVAL_SAVE_IMAGE = 10;
+int previous_frame = -1 * INTERVAL_SAVE_IMAGE;
 
 void handle_sigint(int sig) {
     if (g_pipeline_program.pipeline) {
@@ -221,7 +222,7 @@ nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
         l_frame = l_frame->next)
     {
         NvDsFrameMeta* frame_meta = (NvDsFrameMeta*)(l_frame->data);
-        std::string image_path = "img" + std::to_string(frame_meta->frame_num);
+        std::string image_path = "/home/jetson/hai/app_copy/_my-app/images_saved/img" + std::to_string(frame_meta->frame_num) + ".jpg";
 
         if (!frame_meta || !frame_meta->obj_meta_list)
             continue;
@@ -254,12 +255,18 @@ nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
             }
 
             is_save_and_pub = true;
-            strncpy(obj_meta->obj_label, image_path.c_str(), sizeof(obj_meta->obj_label) - 1);
-            obj_meta->obj_label[sizeof(obj_meta->obj_label) - 1] = '\0';
+            if (is_save_and_pub and frame_meta->frame_num - previous_frame >= INTERVAL_SAVE_IMAGE)
+            {
+                // Setting publish to Kafka broker
+                strncpy(obj_meta->obj_label, image_path.c_str(), sizeof(obj_meta->obj_label) - 1);
+                obj_meta->obj_label[sizeof(obj_meta->obj_label) - 1] = '\0';
+            }
         }
 
-        if (is_save_and_pub)
+        if (is_save_and_pub and frame_meta->frame_num - previous_frame >= INTERVAL_SAVE_IMAGE)
         {
+            previous_frame = frame_meta->frame_num;
+
             NvDsObjectMeta newMeta;
             newMeta.rect_params.width = frame_meta->source_frame_width;
             newMeta.rect_params.height = frame_meta->source_frame_height;
@@ -274,17 +281,18 @@ nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
             userData.scaledHeight = 0;
             userData.objNum = 1;
             userData.quality = 80; /* Quality */
-            sprintf(userData.fileNameImg, "%s.jpg", image_path.c_str());
+            sprintf(userData.fileNameImg, "%s", image_path.c_str());
 
             /*Main Function Call */
-            g_print("Before nvds_obj_enc_process\n");
+            g_print("Save image: %s\n", userData.fileNameImg);
+            // g_print("Before nvds_obj_enc_process\n");
             nvds_obj_enc_process((NvDsObjEncCtxHandle)ctx, &userData, ip_surf, &newMeta, frame_meta);
-            g_print("After nvds_obj_enc_process\n");
+            // g_print("After nvds_obj_enc_process\n");
         }
     }
-    g_print("Before nvds_obj_enc_finish\n");
+    // g_print("Before nvds_obj_enc_finish\n");
     nvds_obj_enc_finish((NvDsObjEncCtxHandle)ctx);
-    g_print("After nvds_obj_enc_finish\n");
+    // g_print("After nvds_obj_enc_finish\n");
 
     return GST_PAD_PROBE_OK;
 }

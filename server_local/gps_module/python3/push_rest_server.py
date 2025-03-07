@@ -14,13 +14,18 @@ def send_pothole_detection(latitude, longitude, image_path, user_id='6639ff3aa24
     Returns:
         dict: Phản hồi từ server
     """
-    url = "http://103.188.243.119:3005/api/detection/create"
+    if latitude == 0.0 and longitude == 0.0:
+        latitude = 15.074548
+        longitude = 101.15208
+
+    url = "http://103.188.243.119:3005/api/detection/create-for-jetson"
 
     # Dữ liệu gửi lên (form-data)
     data = {
         "userId": user_id,
         "typeDetection": type_detection,
-        "location": f"LatLng(latitude:{latitude}, longitude:{longitude})"
+        "location": f"LatLng(latitude:{latitude}, longitude:{longitude})",
+        "description": "Small",
     }
 
     # Gửi request với file ảnh

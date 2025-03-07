@@ -28,7 +28,6 @@ def consume_kafka():
 def process_data(gps_device, path_image):
     """Lấy GPS và gửi API mà không chặn Kafka Consumer"""
     latitude, longitude = get_gps_data(gps_device)
-    path_image = '/home/jetson/hai/app_copy/_my-app/debug/pipeline.png'  # Sẽ sửa khi lưu ảnh
     response = send_pothole_detection(latitude=latitude, longitude=longitude, image_path=path_image)
     print("API Response:", response)
 
