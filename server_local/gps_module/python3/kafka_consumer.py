@@ -12,23 +12,25 @@ def consume_kafka():
     for msg in consumer:
         data = json.loads(msg.value.decode('utf-8'))  # Giải mã JSON
         objects = data.get("objects", [])  # Lấy danh sách objects
-
+        potholes = []
         path_image = None
         for obj in objects:
             columns = obj.split('|')
             if len(columns) >= 6 and columns[5][0] == '/':
                 path_image = columns[5]
+            x1, y1, x2, y2 = columns[1:5]
+            potholes.append((x1, y1, x2, y2))
 
         if path_image:
             print("Received path image:", path_image)
 
             # Chạy lấy GPS và gửi API trong một luồng riêng
-            threading.Thread(target=process_data, args=(gps_device, path_image), daemon=True).start()
+            threading.Thread(target=process_data, args=(gps_device, path_image, potholes), daemon=True).start()
 
-def process_data(gps_device, path_image):
+def process_data(gps_device, path_image, potholes):
     """Lấy GPS và gửi API mà không chặn Kafka Consumer"""
     latitude, longitude = get_gps_data(gps_device)
-    response = send_pothole_detection(latitude=latitude, longitude=longitude, image_path=path_image)
+    response = send_pothole_detection(latitude, longitude, path_image, potholes)
     print("API Response:", response)
 
 if __name__ == "__main__":
