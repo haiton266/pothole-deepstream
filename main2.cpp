@@ -6,11 +6,15 @@
 #include <unordered_map>
 #include <queue>
 #include <string>
+#include <cuda_runtime_api.h>
+#include <opencv2/opencv.hpp>
 
 #include "gstnvdsmeta.h"
 #include "nvbufsurface.h"
 #include "nvds_obj_encode.h"
+#include "nvbufsurftransform.h"
 
+#include "common_util.hpp"
 #include "file_source_bin.hpp"
 #include "file_sink_bin.hpp"
 #include "rtsp_sink_bin.hpp"
@@ -18,78 +22,19 @@
 #include "message_broker_bin.hpp"
 
 Pipeline g_pipeline_program;
-const int INTERVAL_SAVE_IMAGE = 10;
+const size_t MAX_IDS = 100;
+const int INTERVAL_SAVE_IMAGE = 18;
 int previous_frame = -1 * INTERVAL_SAVE_IMAGE;
+
+gint g_gpu_id = 0;
+NvBufSurface* g_inter_buf = nullptr;
+cudaStream_t g_cuda_stream;
 
 void handle_sigint(int sig) {
     if (g_pipeline_program.pipeline) {
         g_print("Caught SIGINT, sending EOS...\n");
         gst_element_send_event(g_pipeline_program.pipeline, gst_event_new_eos());
     }
-}
-
-static gchar *
-get_absolute_file_path(gchar *cfg_file_path, gchar *file_path)
-{
-    gchar abs_cfg_path[PATH_MAX + 1];
-    gchar *abs_file_path;
-    gchar *delim;
-
-    if (file_path && file_path[0] == '/')
-    {
-        return file_path;
-    }
-
-    if (!realpath(cfg_file_path, abs_cfg_path))
-    {
-        g_free(file_path);
-        return NULL;
-    }
-
-    // Return absolute path of config file if file_path is NULL.
-    if (!file_path)
-    {
-        abs_file_path = g_strdup(abs_cfg_path);
-        return abs_file_path;
-    }
-
-    delim = g_strrstr(abs_cfg_path, "/");
-    *(delim + 1) = '\0';
-
-    abs_file_path = g_strconcat(abs_cfg_path, file_path, NULL);
-    g_free(file_path);
-
-    return abs_file_path;
-}
-
-static gboolean
-bus_call(G_GNUC_UNUSED GstBus *bus, GstMessage *msg, gpointer data)
-{
-    GMainLoop *loop = (GMainLoop *)data;
-    switch (GST_MESSAGE_TYPE(msg))
-    {
-    case GST_MESSAGE_EOS:
-        g_print("End of stream\n");
-        g_main_loop_quit(loop);
-        break;
-    case GST_MESSAGE_ERROR:
-    {
-        gchar *debug;
-        GError *error;
-        gst_message_parse_error(msg, &error, &debug);
-        g_printerr("ERROR from element %s: %s\n",
-                   GST_OBJECT_NAME(msg->src), error->message);
-        if (debug)
-            g_printerr("Error details: %s\n", debug);
-        g_free(debug);
-        g_error_free(error);
-        g_main_loop_quit(loop);
-        break;
-    }
-    default:
-        break;
-    }
-    return TRUE;
 }
 
 // Pad probe function
@@ -197,10 +142,107 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
-const size_t MAX_IDS = 100;
+cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
+    gdouble& ratio, gint processing_width,
+    gint processing_height) {
+
+    NvOSD_RectParams rect_params;
+
+    // Scale the entire frame to processing resolution
+    rect_params.left = 0;
+    rect_params.top = 0;
+    rect_params.width = processing_width;
+    rect_params.height = processing_height;
+
+    gint src_left = GST_ROUND_UP_2((int)rect_params.left);
+    gint src_top = GST_ROUND_UP_2((int)rect_params.top);
+    gint src_width = GST_ROUND_DOWN_2((int)rect_params.width);
+    gint src_height = GST_ROUND_DOWN_2((int)rect_params.height);
+
+    // Maintain aspect ratio
+    double hdest = processing_width * src_height / (double)src_width;
+    double wdest = processing_height * src_width / (double)src_height;
+    guint dest_width, dest_height;
+
+    if (hdest <= processing_height) {
+        dest_width = processing_width;
+        dest_height = hdest;
+    } else {
+        dest_width = wdest;
+        dest_height = processing_height;
+    }
+
+    // Configure transform session parameters for the transformation
+    NvBufSurfTransformConfigParams transform_config_params;
+    transform_config_params.compute_mode = NvBufSurfTransformCompute_Default;
+    transform_config_params.gpu_id = g_gpu_id;
+    transform_config_params.cuda_stream = g_cuda_stream;
+
+    // Set the transform session parameters for the conversions executed in this thread.
+    if (auto err = NvBufSurfTransformSetSessionParams(&transform_config_params);
+    err != NvBufSurfTransformError_Success) {
+    g_printerr("NvBufSurfTransformSetSessionParams failed with error {}\n", err);
+    return nullptr;
+    }
+
+    // Calculate scaling ratio while maintaining aspect ratio
+    ratio = MIN(1.0 * dest_width / src_width, 1.0 * dest_height / src_height);
+
+    if ((rect_params.width == 0) || (rect_params.height == 0)) {
+        g_printerr("[get_opencv_mat]:crop_rect_params dimensions are zero");
+        return nullptr;
+    }
+
+    #ifdef __aarch64__
+    if (ratio <= 1.0 / 16 || ratio >= 16.0) {
+        // Currently cannot scale by ratio > 16 or < 1/16 for Jetson
+        g_printerr("[get_opencv_mat] ratio {} not in range of [.0625 : 16]", ratio);
+    return nullptr;
+    }
+    #endif
+    // Set the transform ROIs for source and destination
+    NvBufSurfTransformRect src_rect = {(guint)src_top, (guint)src_left, (guint)src_width,
+                        (guint)src_height};
+    NvBufSurfTransformRect dst_rect = {0, 0, (guint)dest_width, (guint)dest_height};
+
+    // Set the transform parameters
+    NvBufSurfTransformParams transform_params;
+    transform_params.src_rect = &src_rect;
+    transform_params.dst_rect = &dst_rect;
+    transform_params.transform_flag =
+    NVBUFSURF_TRANSFORM_FILTER | NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
+    transform_params.transform_filter = NvBufSurfTransformInter_Default;
+
+    // Memset the memory
+    NvBufSurfaceMemSet(g_inter_buf, idx, 0, 0);
+
+    if (auto err = NvBufSurfTransform(&ip_surf, g_inter_buf, &transform_params);
+        err != NvBufSurfTransformError_Success) {
+            g_printerr("NvBufSurfTransform failed with error while converting buffer");
+            return nullptr;
+    }
+    // Map the buffer so that it can be accessed by CPU
+    if (NvBufSurfaceMap(g_inter_buf, idx, 0, NVBUF_MAP_READ) != 0) {
+        return nullptr;
+    }
+
+    const auto in_mat =
+    cv::Mat(processing_height, processing_width, CV_8UC4,
+    g_inter_buf->surfaceList[0].mappedAddr.addr[0], g_inter_buf->surfaceList[0].pitch);
+
+    cv::Mat* image_bgr = new cv::Mat;
+
+    cv::cvtColor(in_mat, *image_bgr, cv::COLOR_RGBA2BGR);
+
+    if (NvBufSurfaceUnMap(g_inter_buf, idx, 0)) {
+        return nullptr;
+    }
+
+    return image_bgr;
+}
 
 static GstPadProbeReturn
-nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
+nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
 {
     static std::unordered_map<int, bool> recent_ids;
     static std::queue<int> id_queue;
@@ -222,7 +264,7 @@ nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
         l_frame = l_frame->next)
     {
         NvDsFrameMeta* frame_meta = (NvDsFrameMeta*)(l_frame->data);
-        std::string image_path = "/home/jetson/hai/app_copy/_my-app/images_saved/img" + std::to_string(frame_meta->frame_num) + ".jpg";
+        std::string image_path = "./images_saved/img" + std::to_string(frame_meta->frame_num) + ".jpg";
 
         if (!frame_meta || !frame_meta->obj_meta_list)
             continue;
@@ -267,121 +309,57 @@ nvtracker_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
         {
             previous_frame = frame_meta->frame_num;
 
-            NvDsObjectMeta newMeta;
-            newMeta.rect_params.width = frame_meta->source_frame_width;
-            newMeta.rect_params.height = frame_meta->source_frame_height;
-            newMeta.rect_params.top = 0.0f;
-            newMeta.rect_params.left = 0.0f;
-
-            NvDsObjEncUsrArgs userData = { 0 };
-            userData.saveImg = TRUE;
-            userData.attachUsrMeta = FALSE;
-            userData.scaleImg = FALSE;
-            userData.scaledWidth = 0;
-            userData.scaledHeight = 0;
-            userData.objNum = 1;
-            userData.quality = 80; /* Quality */
-            sprintf(userData.fileNameImg, "%s", image_path.c_str());
-
             /*Main Function Call */
-            g_print("Save image: %s\n", userData.fileNameImg);
-            // g_print("Before nvds_obj_enc_process\n");
-            nvds_obj_enc_process((NvDsObjEncCtxHandle)ctx, &userData, ip_surf, &newMeta, frame_meta);
-            // g_print("After nvds_obj_enc_process\n");
+            g_print("Save image: %s\n", image_path);
+
+            GstVideoInfo video_info = {};
+
+            GstCaps* caps = gst_pad_get_current_caps(pad);
+            if (!gst_video_info_from_caps(&video_info, caps)) {
+                g_printerr("[ProcessFrame] failed to get video_info \n");
+                return (GstPadProbeReturn)GST_FLOW_ERROR;
+            }
+            gst_caps_unref(caps);
+
+            if (g_inter_buf == nullptr) {
+                g_printerr("[ProcessFrame] initializing Frame buffer \n");
+                NvBufSurfaceCreateParams create_params;
+                create_params.gpuId = g_gpu_id;
+                create_params.width = video_info.width;
+                create_params.height = video_info.height;
+                create_params.size = 0;
+                create_params.colorFormat = NVBUF_COLOR_FORMAT_RGBA;
+                create_params.layout = NVBUF_LAYOUT_PITCH;
+                create_params.memType = NVBUF_MEM_SURFACE_ARRAY;
+
+                if (NvBufSurfaceCreate(&g_inter_buf, 1, &create_params) != 0) {
+                    g_printerr ("Error: Could not allocate internal buffer for dsexample\n");
+                    return (GstPadProbeReturn)GST_FLOW_ERROR;
+                }
+            }
+
+            cv::Mat frame;
+            const int index = 0;
+            double scale_ratio = 1.0;
+            const auto frame_width = ip_surf->surfaceList[0].width;
+            const auto frame_height = ip_surf->surfaceList[0].height;
+
+            if (const auto *ret = get_opencv_mat(*ip_surf, index, scale_ratio, frame_width, frame_height); ret == nullptr) {
+                return (GstPadProbeReturn)GST_FLOW_ERROR;
+            } else {
+                frame = *ret;
+                delete ret;
+            }
+            bool success = cv::imwrite(image_path, frame);
+
+            if (success) {
+                g_print("Image saved successfully to %s\n", image_path.c_str());
+            } else {
+                g_print("Error saving image!\n");
+            }
         }
     }
-    // g_print("Before nvds_obj_enc_finish\n");
-    nvds_obj_enc_finish((NvDsObjEncCtxHandle)ctx);
-    // g_print("After nvds_obj_enc_finish\n");
-
     return GST_PAD_PROBE_OK;
-}
-
-static gboolean
-set_tracker_properties(GstElement *nvtracker, gchar *tracker_config_file)
-{
-    gboolean ret = FALSE;
-    GError *error = NULL;
-    gchar **keys = NULL;
-    gchar **key = NULL;
-    GKeyFile *key_file = g_key_file_new();
-
-    if (!g_key_file_load_from_file(key_file, tracker_config_file, G_KEY_FILE_NONE,
-                                   &error))
-    {
-        g_printerr("Failed to load config file: %s\n", error->message);
-        return FALSE;
-    }
-
-    keys = g_key_file_get_keys(key_file, CONFIG_GROUP_TRACKER, NULL, &error);
-    CHECK_ERROR(error);
-
-    for (key = keys; *key; key++)
-    {
-        if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_WIDTH))
-        {
-            gint width =
-                g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
-                                       CONFIG_GROUP_TRACKER_WIDTH, &error);
-            CHECK_ERROR(error);
-            g_object_set(G_OBJECT(nvtracker), "tracker-width", width, NULL);
-        }
-        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_HEIGHT))
-        {
-            gint height =
-                g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
-                                       CONFIG_GROUP_TRACKER_HEIGHT, &error);
-            CHECK_ERROR(error);
-            g_object_set(G_OBJECT(nvtracker), "tracker-height", height, NULL);
-        }
-        else if (!g_strcmp0(*key, CONFIG_GPU_ID))
-        {
-            guint gpu_id =
-                g_key_file_get_integer(key_file, CONFIG_GROUP_TRACKER,
-                                       CONFIG_GPU_ID, &error);
-            CHECK_ERROR(error);
-            g_object_set(G_OBJECT(nvtracker), "gpu_id", gpu_id, NULL);
-        }
-        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_LL_CONFIG_FILE))
-        {
-            char *ll_config_file = get_absolute_file_path(tracker_config_file,
-                                                          g_key_file_get_string(key_file,
-                                                                                CONFIG_GROUP_TRACKER,
-                                                                                CONFIG_GROUP_TRACKER_LL_CONFIG_FILE, &error));
-            CHECK_ERROR(error);
-            g_object_set(G_OBJECT(nvtracker), "ll-config-file", ll_config_file, NULL);
-        }
-        else if (!g_strcmp0(*key, CONFIG_GROUP_TRACKER_LL_LIB_FILE))
-        {
-            char *ll_lib_file = get_absolute_file_path(tracker_config_file,
-                                                       g_key_file_get_string(key_file,
-                                                                             CONFIG_GROUP_TRACKER,
-                                                                             CONFIG_GROUP_TRACKER_LL_LIB_FILE, &error));
-            CHECK_ERROR(error);
-            g_object_set(G_OBJECT(nvtracker), "ll-lib-file", ll_lib_file, NULL);
-        }
-        else
-        {
-            g_printerr("Unknown key '%s' for group [%s]", *key,
-                       CONFIG_GROUP_TRACKER);
-        }
-    }
-
-    ret = TRUE;
-done:
-    if (error)
-    {
-        g_error_free(error);
-    }
-    if (keys)
-    {
-        g_strfreev(keys);
-    }
-    if (!ret)
-    {
-        g_printerr("%s failed", __func__);
-    }
-    return ret;
 }
 
 void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_path)
@@ -489,30 +467,23 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     }
     gst_object_unref(nvdsosd_sink_pad);
 
-    /*Creat Context for Object Encoding */
-    NvDsObjEncCtxHandle obj_ctx_handle = nvds_obj_enc_create_context();
-    if (!obj_ctx_handle)
-    {
-        g_print("Unable to create context\n");
-        return;
-    }
-
     // Attach pad probe to the src pad of nvtracker
-    GstPad *nvtracker_src_pad =
-        gst_element_get_static_pad(process_bin->nvtracker, "src");
-    if (!nvtracker_src_pad)
+    GstPad *osd_src_pad =
+        gst_element_get_static_pad(process_bin->nvdsosd, "src");
+    if (!osd_src_pad)
     {
         g_printerr("Unable to get nvtracker src pad\n");
     }
     else
     {
-        gst_pad_add_probe(nvtracker_src_pad,
+        gst_pad_add_probe(osd_src_pad,
                           GST_PAD_PROBE_TYPE_BUFFER,
-                          nvtracker_src_pad_buffer_probe,
-                          (gpointer)obj_ctx_handle,
+                          nvdsosd_src_pad_buffer_probe,
+                        //   (gpointer)obj_ctx_handle,
+                          NULL,
                           NULL);
     }
-    gst_object_unref(nvtracker_src_pad);
+    gst_object_unref(osd_src_pad);
 
     // Add src ghost pad to process bin
     GstPad *srcpad_nvdsosd = gst_element_get_static_pad(process_bin->nvdsosd, "src");

@@ -17,12 +17,15 @@ set(DEEPSTREAM_APPS_COMMON_INCLUDES_DIR ${DEEPSTREAM_DIR}/sources/apps/apps-comm
 
 # Find required packages
 find_package(PkgConfig REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(CUDA REQUIRED)
 # set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/usr/local/include/yaml-cpp")
 # find_package(yaml-cpp REQUIRED)
 
 pkg_check_modules(GST REQUIRED gstreamer-1.0)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GSTRTSP REQUIRED gstreamer-rtsp-server-1.0)
+pkg_check_modules(GSTREAMER_VIDEO REQUIRED gstreamer-video-1.0)
 
 # Display configuration details
 message(STATUS "GStreamer RTSP Server version: ${GSTRTSP_VERSION}")
@@ -36,12 +39,15 @@ message(STATUS "DEEPSTREAM app common include dirs: ${DEEPSTREAM_APPS_COMMON_INC
 include_directories(
     # ${YAML_CPP_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/utils
+    ${CUDA_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}
     ${GST_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${DEEPSTREAM_SOURCES_INCLUDES_DIR}
     ${DEEPSTREAM_APPS_COMMON_INCLUDES_DIR}
     ${GSTRTSP_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
+    ${GSTREAMER_VIDEO_INCLUDE_DIRS}
 )
 
 # Source files
@@ -56,6 +62,11 @@ add_executable(
     ${SRC_FILES}
 )
 
+# Link directories for GStreamer and GLib
+link_directories(
+    ${GSTREAMER_VIDEO_LIBRARY_DIRS}
+)
+
 # Link libraries
 target_link_libraries(
     main2 PRIVATE yaml-cpp
@@ -63,11 +74,15 @@ target_link_libraries(
     ${GST_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${GSTRTSP_LIBRARIES}
+    ${CUDA_CUDART_LIBRARY}
+    ${OpenCV_LIBS}
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvds_meta.so
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvdsgst_meta.so
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvdsgst_helper.so
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvds_batch_jpegenc.so
     ${DEEPSTREAM_LIBRARIES_DIR}/libnvbufsurface.so
+    ${DEEPSTREAM_LIBRARIES_DIR}/libnvbufsurftransform.so
+    ${GSTREAMER_VIDEO_LIBRARIES}
 )
 
 # Compiler options
