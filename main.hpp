@@ -45,6 +45,7 @@ class ProcessBin
 {
 public:
     GstElement *bin;
+    GstElement *nvdspreprocess;
     GstElement *nvinfer;
     GstElement *nvtracker;
     GstElement *nvvidconv;

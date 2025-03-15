@@ -375,9 +375,9 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
                  "batch-size",
                  1,
                  "width",
-                 1920,
+                 1280,
                  "height",
-                 1080,
+                 720,
                  "batched-push-timeout",
                  40000,
                  NULL);
@@ -421,6 +421,11 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     ProcessBin *process_bin = new ProcessBin();
     process_bin->bin = gst_bin_new("process-bin");
 
+    // This for processing ROI
+    YAML::Node nvdspreprocess = config["nvdspreprocess"];
+    process_bin->nvdspreprocess = gst_element_factory_make("nvdspreprocess", "nvdspreprocess");
+    string pre_config_file_path = nvdspreprocess["config-file-path"].as<string>();
+
     // This is for inference
     YAML::Node inference = config["nvinfer"];
     string config_file_path = inference["config-file-path"].as<string>();
@@ -436,7 +441,11 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     process_bin->nvdsosd = gst_element_factory_make("nvdsosd", "nvdsosd");
 
     // Set properties
-    g_object_set(G_OBJECT(process_bin->nvinfer), "config-file-path", config_file_path.c_str(), NULL);
+    g_object_set(G_OBJECT(process_bin->nvdspreprocess), "config-file", pre_config_file_path.c_str(), NULL);
+    g_object_set(G_OBJECT(process_bin->nvinfer),
+        "config-file-path", config_file_path.c_str(),
+        "input-tensor-meta", 1,
+        NULL);
     if (!set_tracker_properties(process_bin->nvtracker, (gchar *)tracker_config_file_path.c_str()))
     {
          g_printerr("Failed to set tracker properties. Exiting.\n");
@@ -444,12 +453,14 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     }
 
     gst_bin_add_many(GST_BIN(process_bin->bin),
+                     process_bin->nvdspreprocess,
                      process_bin->nvinfer,
                      process_bin->nvtracker,
                      process_bin->nvvidconv,
                      process_bin->nvdsosd,
                      NULL);
-    gst_element_link_many(process_bin->nvinfer,
+    gst_element_link_many(process_bin->nvdspreprocess,
+                          process_bin->nvinfer,
                           process_bin->nvtracker,
                           process_bin->nvvidconv,
                           process_bin->nvdsosd,
@@ -500,8 +511,8 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     }
 
     // Add sink ghost pad to process bin
-    GstPad *sinkpad_nvinfer = gst_element_get_static_pad(process_bin->nvinfer, "sink");
-    process_bin->sink_ghost_pad = gst_ghost_pad_new("sink", sinkpad_nvinfer);
+    GstPad *sinkpad_nvdspreprocess = gst_element_get_static_pad(process_bin->nvdspreprocess, "sink");
+    process_bin->sink_ghost_pad = gst_ghost_pad_new("sink", sinkpad_nvdspreprocess);
     gst_pad_set_active(process_bin->sink_ghost_pad, TRUE);
     if (!gst_element_add_pad(process_bin->bin, process_bin->sink_ghost_pad))
     {
