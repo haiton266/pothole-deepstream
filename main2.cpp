@@ -310,7 +310,7 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
             previous_frame = frame_meta->frame_num;
 
             /*Main Function Call */
-            g_print("Save image: %s\n", image_path);
+            g_print("Save image: %s\n", image_path.c_str());
 
             GstVideoInfo video_info = {};
 
@@ -392,7 +392,7 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     {
         g_printerr("Failed to add ghost pad in file source bin\n");
     }
-
+    std::string type;
     for (YAML::const_iterator it = source.begin(); it != source.end(); ++it)
     {
         string key = it->first.as<string>();
@@ -403,12 +403,17 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
         }
         else if (key == "webcam")
         {
+            type = "webcam";
             WebcamSrcBin *webcam_src_bin = new WebcamSrcBin();
             setup_webcam_src_bin(webcam_src_bin, src_bin, it->second["device"].as<string>());
         }
     }
     gst_bin_add(GST_BIN(g_pipeline_program->pipeline), src_bin->bin);
     g_pipeline_program->src_bin = src_bin;
+
+    if (type == "webcam")
+        g_object_set(G_OBJECT(src_bin->nvstreammux),"live-source", 1, NULL);
+
     g_print("Source node initialized\n");
     // End of source node ============================================================
 
