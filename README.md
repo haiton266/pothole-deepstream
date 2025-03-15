@@ -1,6 +1,15 @@
-# Deepstream YOLOv8
+# Deepstream YOLOv11
 
 This repo is used for DUT science research contest. Using Deepstream and target highest performance on Jetson Nano.
+
+Output Results - Frame with ROI
+![Output Frame with ROI](assets/img700.jpg)
+
+DeepStream Pipeline (Exported from GST DOT FILE)
+
+<div style="overflow-x: auto; white-space: nowrap; max-height: height;">
+  <img src="assets/pipeline.png" alt="DeepStream Pipeline" style="max-width: none; height: 160px;">
+</div>
 
 ## Installation
 
@@ -21,51 +30,32 @@ If you install ok, I comment line 1 in CmakeLists.txt else need clone and build 
 
 Modify DS version in CmakeLists.txt
 
-## Usage
-
-For the first time, you need create build/
-```bash
-mkdir build
-```
-
-Build and run
-```bash
-cd build
-cmake ..
-make -j
-```
-
-For the next times, only delete old make
-```bash
-make clean
-```
-
-Running with save dot file and show error
-```bash
-GST_DEBUG_DUMP_DOT_DIR=/home/jetson/hai/_my-app/debug GST_DEBUG=1 ./build/main2 configs/pipeline_config.txt
-```
-
 Debug by exporting pipeline image (make sure install graphviz)
 ```bash
 dot -Tpng debug/pipeline.dot -o debug/pipeline.png
 dot -Tpng debug/bin.dot -o debug/bin.png
 ```
-
 ---
-#### Overview
+### Build and Execution Scripts
+- **`build.sh`**: Cleans old compiled files and rebuilds the project.
+- **`run.sh`**: Executes the main application code.
+
+### Kafka Broker Management
+- **`broker1.sh`**: First Initialize Kafka broker.
+- **`broker2.sh`**: Second Initialize Kafka broker.
+- **`kafka.sh`**: Runs the Kafka consumer. Source in `server_local/gps_module/python3/kafka_consumer.py`
+---
 The `kafka_consumer.py` script listens for new pothole detection events from a Kafka topic. Upon receiving an event, it:
 1. Retrieves GPS coordinates.
 2. Reads the associated pothole image.
 3. Sends the data to a cloud server via a REST API for map updates.
 
-#### File Location
-```
-server_local/gps_module/python3/kafka_consumer.py
-```
+### 📂 Ipynb in Google Colab related to Data and AI
 
-#### Usage
-To run the script, execute:
-```bash
-sudo python3 kafka_consumer.py
-```
-Note: this code create new thread when subcribe a new pothole
+| Notebook  | Link |
+|-----------|------|
+| Convert .pt to .onnx model | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1oDeOanjJrb2F7yEUOOqP42MKH9R3Rv6z) |
+| FiftyOne to validate dataset | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1UqskgxYIuALjBIv_g_aaxTW5DieYYbqE) |
+| Process data Kaggle Pothole | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1yxJNHxrcL7UKLGlrL16cSXgr6nXKtYhW#scrollTo=TAyC6py8K4bx) |
+| Test YOLO | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1YCGI9db6zX54XI6ZZo55jC0nyoXe7uCY?usp=sharing) |
+| Youtube_pothole_dataset_upload_roboflow | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1wsQZyXeLhr-54hV26Nu9JXvd0hgF4faa?usp=sharing) |
