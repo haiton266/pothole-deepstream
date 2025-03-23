@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import threading
+# import threading
 import json
 from kafka import KafkaConsumer
 from get_gps import initialize_gps, get_gps_data
@@ -16,16 +16,16 @@ def consume_kafka():
         path_image = None
         for obj in objects:
             columns = obj.split('|')
-            if len(columns) >= 6 and columns[5][0] == '/':
+            if len(columns) >= 6 and columns[5][1] == '/':
                 path_image = columns[5]
             x1, y1, x2, y2 = columns[1:5]
             potholes.append((x1, y1, x2, y2))
 
         if path_image:
             print("Received path image:", path_image)
-
+            process_data(gps_device, path_image, potholes)
             # Chạy lấy GPS và gửi API trong một luồng riêng
-            threading.Thread(target=process_data, args=(gps_device, path_image, potholes), daemon=True).start()
+            # threading.Thread(target=process_data, args=(gps_device, path_image, potholes), daemon=True).start()
 
 def process_data(gps_device, path_image, potholes):
     """Lấy GPS và gửi API mà không chặn Kafka Consumer"""
