@@ -3,7 +3,6 @@ server_local/__pycache__
 yaml-cpp/*
 build/
 yolov8/models/*.engine
-debug/saved_image/*
 temp/
 videos/input/*
 videos/output/*
@@ -13,4 +12,12 @@ yolov8/nvdsinfer_custom_impl_Yolo_seg/*.o
 yolov8/nvdsinfer_custom_impl_Yolo_seg/*.so
 yolov8/nvdsinfer_custom_impl_Yolo_yolov8/layers/*.o
 yaml-cp
-.venv/
+.venv2/
+debug-payload/
+images_saved/
+server_local/gps_module/python3/__pycache__
+__pycache__
+dev
+deepstream-test3
+RTSP
+debug
