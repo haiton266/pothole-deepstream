@@ -15,8 +15,8 @@ def send_pothole_detection(latitude, longitude, image_path, potholes, user_id='6
         dict: Phản hồi từ server
     """
     if latitude == 0.0 and longitude == 0.0:
-        latitude = 16.074417
-        longitude = 108.152253
+        latitude = 16.074868
+        longitude = 108.154072
 
     url = "http://103.188.243.119:3005/api/detection/create-for-jetson"
 

@@ -24,8 +24,6 @@ def consume_kafka():
         if path_image:
             print("Received path image:", path_image)
             process_data(gps_device, path_image, potholes)
-            # Chạy lấy GPS và gửi API trong một luồng riêng
-            # threading.Thread(target=process_data, args=(gps_device, path_image, potholes), daemon=True).start()
 
 def process_data(gps_device, path_image, potholes):
     """Lấy GPS và gửi API mà không chặn Kafka Consumer"""
