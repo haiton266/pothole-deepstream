@@ -39,46 +39,6 @@ void handle_sigint(int sig)
     }
 }
 
-// Pad probe function for nvinfer src pad
-static GstPadProbeReturn
-nvinfer_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
-{
-    // Loop through the buffer list, loop all object and print class id
-    GstBuffer *buf = GST_PAD_PROBE_INFO_BUFFER(info);
-    if (!buf)
-        return GST_PAD_PROBE_OK;
-    GstMapInfo inmap = GST_MAP_INFO_INIT;
-    if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
-    {
-        GST_ERROR("input buffer mapinfo failed");
-        return GST_PAD_PROBE_OK;
-    }
-    NvBufSurface *ip_surf = (NvBufSurface *)inmap.data;
-    gst_buffer_unmap(buf, &inmap);
-    NvDsMetaList *l_frame = NULL;
-
-    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
-    for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-         l_frame = l_frame->next)
-    {
-        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(l_frame->data);
-        if (!frame_meta || !frame_meta->obj_meta_list)
-            continue;
-
-        for (NvDsMetaList *obj_list = frame_meta->obj_meta_list;
-             obj_list != NULL;
-             obj_list = obj_list->next)
-        {
-            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
-            if (!obj_meta)
-                continue;
-
-            g_print("Class ID: %d\n", obj_meta->class_id);
-        }
-    }
-    return GST_PAD_PROBE_OK;
-}
-
 // Pad probe function
 static GstPadProbeReturn
 nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
@@ -147,7 +107,6 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
             if (!obj_meta)
                 continue;
-            g_print("Object ID: %ld\n", obj_meta->object_id);
             gpointer color_ptr = g_hash_table_lookup(color_map, &(obj_meta->object_id));
             gfloat *color = (gfloat *)color_ptr;
 
@@ -530,23 +489,6 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
                           process_bin->nvdsosd,
                           NULL);
 
-    // Attach pad probe to the src pad of nvinfer
-    GstPad *infer_src_pad =
-        gst_element_get_static_pad(process_bin->nvinfer, "src");
-    if (!infer_src_pad)
-    {
-        g_printerr("Unable to get nvinfer src pad\n");
-    }
-    else
-    {
-        gst_pad_add_probe(infer_src_pad,
-                          GST_PAD_PROBE_TYPE_BUFFER,
-                          nvinfer_src_pad_buffer_probe,
-                          NULL,
-                          NULL);
-    }
-    gst_object_unref(infer_src_pad);
-
     // Attach pad probe to the sink pad of nvdsosd
     GstPad *nvdsosd_sink_pad =
         gst_element_get_static_pad(process_bin->nvdsosd, "sink");
@@ -637,8 +579,8 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
             setup_rtsp_sink_bin(rtsp_sink_bin, sink_bin, it->second["ip"].as<string>(), it->second["port"].as<int>());
         }
     }
-    // MessageBroker *msg_broker_bin = new MessageBroker();
-    // setup_message_broker(msg_broker_bin, sink_bin);
+    MessageBroker *msg_broker_bin = new MessageBroker();
+    setup_message_broker(msg_broker_bin, sink_bin);
 
     gst_bin_add(GST_BIN(g_pipeline_program->pipeline), sink_bin->bin);
     g_pipeline_program->sink_bin = sink_bin;

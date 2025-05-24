@@ -41,6 +41,7 @@ dot -Tpng debug/bin.dot -o debug/bin.png
 - **`run.sh`**: Executes the main application code.
 
 ### Kafka Broker Management
+About installation: https://kafka.apache.org/quickstart
 - **`broker1.sh`**: First Initialize Kafka broker.
 - **`broker2.sh`**: Second Initialize Kafka broker.
 - **`kafka.sh`**: Runs the Kafka consumer. Source in `server_local/gps_module/python3/kafka_consumer.py`
