@@ -2,10 +2,10 @@
 gpu-id=0
 net-scale-factor=0.0039215697906911373
 model-color-format=0
-onnx-file=/home/jetson/hai/_my-app/yolov8/models/yolo11n.pt.onnx
-model-engine-file=/home/jetson/hai/_my-app/yolov8/models/yolo11n_b1_gpu0_fp16.engine
+onnx-file=/home/ok/hai/pothole-deepstream/yolov8/models/potholev3.onnx
+model-engine-file=/home/ok/hai/pothole-deepstream/yolov8/models/potholev3_b1_gpu0_fp16.engine
 # int8-calib-file=calib.table
-labelfile-path=/home/jetson/hai/_my-app/yolov8/labels.txt
+labelfile-path=/home/ok/hai/pothole-deepstream/yolov8/labels_pothole.txt
 batch-size=1
 network-mode=2
 num-detected-classes=80
@@ -19,7 +19,7 @@ symmetric-padding=1
 #workspace-size=2000
 parse-bbox-func-name=NvDsInferParseYolo
 #parse-bbox-func-name=NvDsInferParseYoloCuda
-custom-lib-path=/home/jetson/hai/_my-app/yolov8/nvdsinfer_custom_impl_Yolo_yolov8/libnvdsinfer_custom_impl_Yolo.so
+custom-lib-path=/home/ok/hai/pothole-deepstream/yolov8/nvdsinfer_custom_impl_Yolo_yolov8/libnvdsinfer_custom_impl_Yolo.so
 engine-create-func-name=NvDsInferYoloCudaEngineGet
 
 [class-attrs-all]

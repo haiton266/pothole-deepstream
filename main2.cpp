@@ -23,18 +23,60 @@
 
 Pipeline g_pipeline_program;
 const size_t MAX_IDS = 100;
-const int INTERVAL_SAVE_IMAGE = 18;
+const int INTERVAL_SAVE_IMAGE = 5;
 int previous_frame = -1 * INTERVAL_SAVE_IMAGE;
 
 gint g_gpu_id = 0;
-NvBufSurface* g_inter_buf = nullptr;
+NvBufSurface *g_inter_buf = nullptr;
 cudaStream_t g_cuda_stream;
 
-void handle_sigint(int sig) {
-    if (g_pipeline_program.pipeline) {
+void handle_sigint(int sig)
+{
+    if (g_pipeline_program.pipeline)
+    {
         g_print("Caught SIGINT, sending EOS...\n");
         gst_element_send_event(g_pipeline_program.pipeline, gst_event_new_eos());
     }
+}
+
+// Pad probe function for nvinfer src pad
+static GstPadProbeReturn
+nvinfer_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data)
+{
+    // Loop through the buffer list, loop all object and print class id
+    GstBuffer *buf = GST_PAD_PROBE_INFO_BUFFER(info);
+    if (!buf)
+        return GST_PAD_PROBE_OK;
+    GstMapInfo inmap = GST_MAP_INFO_INIT;
+    if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
+    {
+        GST_ERROR("input buffer mapinfo failed");
+        return GST_PAD_PROBE_OK;
+    }
+    NvBufSurface *ip_surf = (NvBufSurface *)inmap.data;
+    gst_buffer_unmap(buf, &inmap);
+    NvDsMetaList *l_frame = NULL;
+
+    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+    for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+         l_frame = l_frame->next)
+    {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(l_frame->data);
+        if (!frame_meta || !frame_meta->obj_meta_list)
+            continue;
+
+        for (NvDsMetaList *obj_list = frame_meta->obj_meta_list;
+             obj_list != NULL;
+             obj_list = obj_list->next)
+        {
+            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
+            if (!obj_meta)
+                continue;
+
+            g_print("Class ID: %d\n", obj_meta->class_id);
+        }
+    }
+    return GST_PAD_PROBE_OK;
 }
 
 // Pad probe function
@@ -52,7 +94,7 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
         start_time = time(NULL);
     }
 
-    frame_num++; // Increment once per batch
+    frame_num++;       // Increment once per batch
     fps_frame_count++; // Increment FPS frame count
 
     time_t current_time = time(NULL);
@@ -105,7 +147,7 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
             if (!obj_meta)
                 continue;
-
+            g_print("Object ID: %ld\n", obj_meta->object_id);
             gpointer color_ptr = g_hash_table_lookup(color_map, &(obj_meta->object_id));
             gfloat *color = (gfloat *)color_ptr;
 
@@ -142,9 +184,10 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
     return GST_PAD_PROBE_OK;
 }
 
-cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
-    gdouble& ratio, gint processing_width,
-    gint processing_height) {
+cv::Mat *get_opencv_mat(NvBufSurface &ip_surf, gint idx,
+                        gdouble &ratio, gint processing_width,
+                        gint processing_height)
+{
 
     NvOSD_RectParams rect_params;
 
@@ -164,10 +207,13 @@ cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
     double wdest = processing_height * src_width / (double)src_height;
     guint dest_width, dest_height;
 
-    if (hdest <= processing_height) {
+    if (hdest <= processing_height)
+    {
         dest_width = processing_width;
         dest_height = hdest;
-    } else {
+    }
+    else
+    {
         dest_width = wdest;
         dest_height = processing_height;
     }
@@ -180,29 +226,32 @@ cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
 
     // Set the transform session parameters for the conversions executed in this thread.
     if (auto err = NvBufSurfTransformSetSessionParams(&transform_config_params);
-    err != NvBufSurfTransformError_Success) {
-    g_printerr("NvBufSurfTransformSetSessionParams failed with error {}\n", err);
-    return nullptr;
+        err != NvBufSurfTransformError_Success)
+    {
+        g_printerr("NvBufSurfTransformSetSessionParams failed with error {}\n", err);
+        return nullptr;
     }
 
     // Calculate scaling ratio while maintaining aspect ratio
     ratio = MIN(1.0 * dest_width / src_width, 1.0 * dest_height / src_height);
 
-    if ((rect_params.width == 0) || (rect_params.height == 0)) {
+    if ((rect_params.width == 0) || (rect_params.height == 0))
+    {
         g_printerr("[get_opencv_mat]:crop_rect_params dimensions are zero");
         return nullptr;
     }
 
-    #ifdef __aarch64__
-    if (ratio <= 1.0 / 16 || ratio >= 16.0) {
+#ifdef __aarch64__
+    if (ratio <= 1.0 / 16 || ratio >= 16.0)
+    {
         // Currently cannot scale by ratio > 16 or < 1/16 for Jetson
         g_printerr("[get_opencv_mat] ratio {} not in range of [.0625 : 16]", ratio);
-    return nullptr;
+        return nullptr;
     }
-    #endif
+#endif
     // Set the transform ROIs for source and destination
     NvBufSurfTransformRect src_rect = {(guint)src_top, (guint)src_left, (guint)src_width,
-                        (guint)src_height};
+                                       (guint)src_height};
     NvBufSurfTransformRect dst_rect = {0, 0, (guint)dest_width, (guint)dest_height};
 
     // Set the transform parameters
@@ -210,31 +259,34 @@ cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
     transform_params.src_rect = &src_rect;
     transform_params.dst_rect = &dst_rect;
     transform_params.transform_flag =
-    NVBUFSURF_TRANSFORM_FILTER | NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
+        NVBUFSURF_TRANSFORM_FILTER | NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
     transform_params.transform_filter = NvBufSurfTransformInter_Default;
 
     // Memset the memory
     NvBufSurfaceMemSet(g_inter_buf, idx, 0, 0);
 
     if (auto err = NvBufSurfTransform(&ip_surf, g_inter_buf, &transform_params);
-        err != NvBufSurfTransformError_Success) {
-            g_printerr("NvBufSurfTransform failed with error while converting buffer");
-            return nullptr;
+        err != NvBufSurfTransformError_Success)
+    {
+        g_printerr("NvBufSurfTransform failed with error while converting buffer");
+        return nullptr;
     }
     // Map the buffer so that it can be accessed by CPU
-    if (NvBufSurfaceMap(g_inter_buf, idx, 0, NVBUF_MAP_READ) != 0) {
+    if (NvBufSurfaceMap(g_inter_buf, idx, 0, NVBUF_MAP_READ) != 0)
+    {
         return nullptr;
     }
 
     const auto in_mat =
-    cv::Mat(processing_height, processing_width, CV_8UC4,
-    g_inter_buf->surfaceList[0].mappedAddr.addr[0], g_inter_buf->surfaceList[0].pitch);
+        cv::Mat(processing_height, processing_width, CV_8UC4,
+                g_inter_buf->surfaceList[0].mappedAddr.addr[0], g_inter_buf->surfaceList[0].pitch);
 
-    cv::Mat* image_bgr = new cv::Mat;
+    cv::Mat *image_bgr = new cv::Mat;
 
     cv::cvtColor(in_mat, *image_bgr, cv::COLOR_RGBA2BGR);
 
-    if (NvBufSurfaceUnMap(g_inter_buf, idx, 0)) {
+    if (NvBufSurfaceUnMap(g_inter_buf, idx, 0))
+    {
         return nullptr;
     }
 
@@ -242,28 +294,28 @@ cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
 }
 
 static GstPadProbeReturn
-nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
+nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer ctx)
 {
     static std::unordered_map<int, bool> recent_ids;
     static std::queue<int> id_queue;
 
-    GstBuffer* buf = (GstBuffer*)info->data;
+    GstBuffer *buf = (GstBuffer *)info->data;
     GstMapInfo inmap = GST_MAP_INFO_INIT;
     if (!gst_buffer_map(buf, &inmap, GST_MAP_READ))
     {
         GST_ERROR("input buffer mapinfo failed");
         return GST_PAD_PROBE_OK;
     }
-    NvBufSurface* ip_surf = (NvBufSurface*)inmap.data;
+    NvBufSurface *ip_surf = (NvBufSurface *)inmap.data;
     gst_buffer_unmap(buf, &inmap);
 
-    NvDsMetaList* l_frame = NULL;
-    NvDsBatchMeta* batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+    NvDsMetaList *l_frame = NULL;
+    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
 
     for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-        l_frame = l_frame->next)
+         l_frame = l_frame->next)
     {
-        NvDsFrameMeta* frame_meta = (NvDsFrameMeta*)(l_frame->data);
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(l_frame->data);
         std::string image_path = "./images_saved/img" + std::to_string(frame_meta->frame_num) + ".jpg";
 
         if (!frame_meta || !frame_meta->obj_meta_list)
@@ -314,14 +366,16 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
 
             GstVideoInfo video_info = {};
 
-            GstCaps* caps = gst_pad_get_current_caps(pad);
-            if (!gst_video_info_from_caps(&video_info, caps)) {
+            GstCaps *caps = gst_pad_get_current_caps(pad);
+            if (!gst_video_info_from_caps(&video_info, caps))
+            {
                 g_printerr("[ProcessFrame] failed to get video_info \n");
                 return (GstPadProbeReturn)GST_FLOW_ERROR;
             }
             gst_caps_unref(caps);
 
-            if (g_inter_buf == nullptr) {
+            if (g_inter_buf == nullptr)
+            {
                 g_printerr("[ProcessFrame] initializing Frame buffer \n");
                 NvBufSurfaceCreateParams create_params;
                 create_params.gpuId = g_gpu_id;
@@ -330,10 +384,14 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
                 create_params.size = 0;
                 create_params.colorFormat = NVBUF_COLOR_FORMAT_RGBA;
                 create_params.layout = NVBUF_LAYOUT_PITCH;
+#ifdef __aarch64__
                 create_params.memType = NVBUF_MEM_SURFACE_ARRAY;
-
-                if (NvBufSurfaceCreate(&g_inter_buf, 1, &create_params) != 0) {
-                    g_printerr ("Error: Could not allocate internal buffer for dsexample\n");
+#else
+                create_params.memType = NVBUF_MEM_CUDA_UNIFIED;
+#endif
+                if (NvBufSurfaceCreate(&g_inter_buf, 1, &create_params) != 0)
+                {
+                    g_printerr("Error: Could not allocate internal buffer for dsexample\n");
                     return (GstPadProbeReturn)GST_FLOW_ERROR;
                 }
             }
@@ -344,17 +402,23 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
             const auto frame_width = ip_surf->surfaceList[0].width;
             const auto frame_height = ip_surf->surfaceList[0].height;
 
-            if (const auto *ret = get_opencv_mat(*ip_surf, index, scale_ratio, frame_width, frame_height); ret == nullptr) {
+            if (const auto *ret = get_opencv_mat(*ip_surf, index, scale_ratio, frame_width, frame_height); ret == nullptr)
+            {
                 return (GstPadProbeReturn)GST_FLOW_ERROR;
-            } else {
+            }
+            else
+            {
                 frame = *ret;
                 delete ret;
             }
             bool success = cv::imwrite(image_path, frame);
 
-            if (success) {
+            if (success)
+            {
                 g_print("Image saved successfully to %s\n", image_path.c_str());
-            } else {
+            }
+            else
+            {
                 g_print("Error saving image!\n");
             }
         }
@@ -412,7 +476,7 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     g_pipeline_program->src_bin = src_bin;
 
     if (type == "webcam")
-        g_object_set(G_OBJECT(src_bin->nvstreammux),"live-source", 1, NULL);
+        g_object_set(G_OBJECT(src_bin->nvstreammux), "live-source", 1, NULL);
 
     g_print("Source node initialized\n");
     // End of source node ============================================================
@@ -443,13 +507,13 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     // Set properties
     g_object_set(G_OBJECT(process_bin->nvdspreprocess), "config-file", pre_config_file_path.c_str(), NULL);
     g_object_set(G_OBJECT(process_bin->nvinfer),
-        "config-file-path", config_file_path.c_str(),
-        "input-tensor-meta", 1,
-        NULL);
+                 "config-file-path", config_file_path.c_str(),
+                 "input-tensor-meta", 1,
+                 NULL);
     if (!set_tracker_properties(process_bin->nvtracker, (gchar *)tracker_config_file_path.c_str()))
     {
-         g_printerr("Failed to set tracker properties. Exiting.\n");
-         return;
+        g_printerr("Failed to set tracker properties. Exiting.\n");
+        return;
     }
 
     gst_bin_add_many(GST_BIN(process_bin->bin),
@@ -465,6 +529,23 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
                           process_bin->nvvidconv,
                           process_bin->nvdsosd,
                           NULL);
+
+    // Attach pad probe to the src pad of nvinfer
+    GstPad *infer_src_pad =
+        gst_element_get_static_pad(process_bin->nvinfer, "src");
+    if (!infer_src_pad)
+    {
+        g_printerr("Unable to get nvinfer src pad\n");
+    }
+    else
+    {
+        gst_pad_add_probe(infer_src_pad,
+                          GST_PAD_PROBE_TYPE_BUFFER,
+                          nvinfer_src_pad_buffer_probe,
+                          NULL,
+                          NULL);
+    }
+    gst_object_unref(infer_src_pad);
 
     // Attach pad probe to the sink pad of nvdsosd
     GstPad *nvdsosd_sink_pad =
@@ -495,7 +576,7 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
         gst_pad_add_probe(osd_src_pad,
                           GST_PAD_PROBE_TYPE_BUFFER,
                           nvdsosd_src_pad_buffer_probe,
-                        //   (gpointer)obj_ctx_handle,
+                          //   (gpointer)obj_ctx_handle,
                           NULL,
                           NULL);
     }
@@ -556,8 +637,8 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
             setup_rtsp_sink_bin(rtsp_sink_bin, sink_bin, it->second["ip"].as<string>(), it->second["port"].as<int>());
         }
     }
-    MessageBroker *msg_broker_bin = new MessageBroker();
-    setup_message_broker(msg_broker_bin, sink_bin);
+    // MessageBroker *msg_broker_bin = new MessageBroker();
+    // setup_message_broker(msg_broker_bin, sink_bin);
 
     gst_bin_add(GST_BIN(g_pipeline_program->pipeline), sink_bin->bin);
     g_pipeline_program->sink_bin = sink_bin;
@@ -578,9 +659,7 @@ int main(int argc, char *argv[])
 
     gst_init(&argc, &argv);
 
-
     g_pipeline_program.pipeline = gst_pipeline_new("pipeline-0");
-
 
     // Set up the SIGINT handler
     signal(SIGINT, handle_sigint);

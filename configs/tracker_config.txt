@@ -30,7 +30,7 @@
 tracker-width=320
 tracker-height=320
 gpu-id=0
-ll-lib-file=//home/jetson/hai/_my-app/bytetrack/libByteTracker.so
+ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
 enable-batch-process=1
 ################## ll-config-file required to set different tracker types ##################
 # ll-config-file=../../../../samples/configs/deepstream-app/config_tracker_IOU.yml
@@ -38,4 +38,5 @@ enable-batch-process=1
 # ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
 # ll-config-file=../../../../samples/configs/deepstream-app/config_tracker_NvDCF_accuracy.yml
 # ll-config-file=../../../../samples/configs/deepstream-app/config_tracker_NvDeepSORT.yml
+ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
 ############################################################################################

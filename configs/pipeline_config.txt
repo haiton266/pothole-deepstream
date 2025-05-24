@@ -1,6 +1,6 @@
 source:
  filesrc:
-   location: /home/jetson/hai/app_copy/_my-app/videos/input/dashcam.mp4
+   location: /home/ok/hai/pothole-deepstream/videos/input/pothole_dashcam_2016.mp4
   #  webcam:
   #   device: /dev/video0
 
@@ -8,13 +8,12 @@ nvdspreprocess:
   config-file-path: configs/config_preprocess.txt
 nvinfer:
   config-file-path: configs/config_infer_primary_yoloV8.txt
-  # config-file-path: temp/dstest1_pgie_config.txts
 nvtracker:
   config-file-path: configs/tracker_config.txt
 
 sink:
-  filesink:
-    location: videos/output/output.mp4
-  # rtsp:
-  #   ip: 127.0.0.1
-  #   port: 8554
+  # filesink:
+  #  location: videos/output/output.mp4
+  rtsp:
+    ip: 0.0.0.0
+    port: 8080

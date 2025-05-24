@@ -49,7 +49,7 @@ scaling-pool-compute-hw=0
     # 6=NvBufSurfTransformInter_Default
 scaling-filter=0
 
-custom-lib-path=/opt/nvidia/deepstream/deepstream-6.0/lib/gst-plugins/libcustom2d_preprocess.so
+custom-lib-path=/opt/nvidia/deepstream/deepstream-7.1/lib/gst-plugins/libcustom2d_preprocess.so
 custom-tensor-preparation-function=CustomTensorPreparation
 
 [user-configs]
