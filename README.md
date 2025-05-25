@@ -61,3 +61,4 @@ The `kafka_consumer.py` script listens for new pothole detection events from a K
 | Test YOLO | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1YCGI9db6zX54XI6ZZo55jC0nyoXe7uCY?usp=sharing) |
 | Youtube_pothole_dataset_upload_roboflow | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1wsQZyXeLhr-54hV26Nu9JXvd0hgF4faa?usp=sharing) |
 | India RDD 2022 | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1bAhFvwBcT54am-vmNkwwpSEpXjgGVs1r?usp=sharing) |
+| Analyze | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1g12TUtRti4B8ZfNsXPmWhsH4yYWBc9Pn?usp=sharing) |
