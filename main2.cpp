@@ -8,6 +8,7 @@
 #include <string>
 #include <cuda_runtime_api.h>
 #include <opencv2/opencv.hpp>
+#include <sys/time.h>
 
 #include "gstnvdsmeta.h"
 #include "nvbufsurface.h"
@@ -44,26 +45,23 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
                               G_GNUC_UNUSED gpointer u_data)
 {
     static int frame_num = 0;
-    static time_t start_time = 0;
     static int fps_frame_count = 0;
-
-    if (start_time == 0)
-    {
-        start_time = time(NULL);
-    }
+    static struct timeval start_time = {0}; // Khởi tạo thời gian bắt đầu
+    struct timeval current_time;
 
     frame_num++; // Increment once per batch
     fps_frame_count++; // Increment FPS frame count
 
-    time_t current_time = time(NULL);
-    double elapsed_time = difftime(current_time, start_time);
+    gettimeofday(&current_time, NULL);
+    double elapsed_time = (current_time.tv_sec - start_time.tv_sec) +
+                      (current_time.tv_usec - start_time.tv_usec) / 1000000.0;
 
     if (elapsed_time >= 1.0)
     {
         double fps = fps_frame_count / elapsed_time;
         g_print("FPS: %.2f\n", fps);
         fps_frame_count = 0;
-        start_time = current_time;
+        gettimeofday(&start_time, NULL);
     }
 
     if (frame_num % 1 == 0)

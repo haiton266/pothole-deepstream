@@ -16,5 +16,5 @@ sink:
   filesink:
     location: videos/output/output.mp4
   # rtsp:
-  #   ip: 127.0.0.1
+  #   ip: 0.0.0.0
   #   port: 8554

@@ -22,9 +22,9 @@ def get_gps_data(x):
     except Exception as e:
         print(f"Error: {e}")  # Print any error that occurs
 
-# Example
-# Call initialize_gps() once to set up the GPS
-gps_device = initialize_gps()
+if __name__ == "__main__":
+    # Call initialize_gps() once to set up the GPS
+    gps_device = initialize_gps()
 
-# Then you can call get_gps_data() whenever you need to retrieve GPS data without waiting
-print(get_gps_data(gps_device))
+    # Then you can call get_gps_data() whenever you need to retrieve GPS data without waiting
+    print(get_gps_data(gps_device))
