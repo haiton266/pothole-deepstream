@@ -18,14 +18,14 @@ def send_pothole_detection(latitude, longitude, image_path, potholes, user_id='6
         latitude = 16.074868
         longitude = 108.154072
 
-    url = "http://103.188.243.119:3005/api/detection/create-for-jetson"
+    url = "http://51.144.112.213:3003/api/detection/create-for-jetson"
 
     # Dữ liệu gửi lên (form-data)
     data = {
         "userId": user_id,
         "typeDetection": type_detection,
         "location": f"LatLng(latitude:{latitude}, longitude:{longitude})",
-        "description": "Small",
+        "description": "Large",
     }
 
     image_path = f"../../.{image_path}"
@@ -45,10 +45,10 @@ def send_pothole_detection(latitude, longitude, image_path, potholes, user_id='6
 if __name__ == "__main__":
     latitude = 15.074548
     longitude = 101.15208
-    image_path = '/home/jetson/hai/app_copy/_my-app/debug/images.jpg'
+    image_path = '/home/jetson/hai/app_copy/_my-app/images_saved/img125.jpg'
 
     # Gọi hàm gửi dữ liệu
-    response = send_pothole_detection(latitude, longitude, image_path)
+    response = send_pothole_detection(latitude, longitude, image_path, '')
 
     # Hiển thị kết quả
     if response:

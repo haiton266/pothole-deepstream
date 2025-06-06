@@ -6,12 +6,12 @@ from get_gps import initialize_gps, get_gps_data
 from push_rest_server import send_pothole_detection
 
 def consume_kafka():
+    gps_device = initialize_gps()  # Initialize GPS once
     consumer = KafkaConsumer('test_topic')
-    gps_device = initialize_gps()  # Khởi tạo GPS một lần
 
     for msg in consumer:
-        data = json.loads(msg.value.decode('utf-8'))  # Giải mã JSON
-        objects = data.get("objects", [])  # Lấy danh sách objects
+        data = json.loads(msg.value.decode('utf-8'))  # Decode JSON
+        objects = data.get("objects", [])  # Get list of objects
         potholes = []
         path_image = None
         for obj in objects:
@@ -26,8 +26,9 @@ def consume_kafka():
             process_data(gps_device, path_image, potholes)
 
 def process_data(gps_device, path_image, potholes):
-    """Lấy GPS và gửi API mà không chặn Kafka Consumer"""
+    """Get GPS and send API without blocking Kafka Consumer"""
     latitude, longitude = get_gps_data(gps_device)
+    print("GPS Data:", latitude, longitude)
     response = send_pothole_detection(latitude, longitude, path_image, potholes)
     print("API Response:", response)
 
