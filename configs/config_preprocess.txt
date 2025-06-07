@@ -61,5 +61,7 @@ pixel-normalization-factor=0.003921568
 src-ids=0
 custom-input-transformation-function=CustomAsyncTransformation
 process-on-roi=1
-roi-params-src-0=250;380;800;250;
-# roi-params-src-0=200;280;1000;500;
+# Demo video
+# roi-params-src-0=250;380;800;250;
+# Overfit
+roi-params-src-0=70;252;1136;468;

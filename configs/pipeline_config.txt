@@ -1,6 +1,12 @@
+common:
+  max-ids: 100
+  interval-save-image: 18 # Best = FPS
+  threshold-save-image: 7 # Best = FPS / 3.5 - 5
+
 source:
  filesrc:
-   location: /home/jetson/hai/app_copy/_my-app/videos/input/dashcam.mp4
+   location: /home/jetson/hai/app_copy/_my-app/videos/input/overfit.mp4
+  #  location: /home/jetson/hai/app_copy/_my-app/videos/input/dashcam.mp4
   #  webcam:
   #   device: /dev/video0
 
@@ -13,6 +19,8 @@ nvtracker:
   config-file-path: configs/tracker_config.txt
 
 sink:
+  broker:
+    config: configs/cfg_msgconv.txt
   filesink:
     location: videos/output/output.mp4
   # rtsp:

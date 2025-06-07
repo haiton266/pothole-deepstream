@@ -23,9 +23,12 @@
 #include "message_broker_bin.hpp"
 
 Pipeline g_pipeline_program;
-const size_t MAX_IDS = 100;
-const int INTERVAL_SAVE_IMAGE = 18;
-int previous_frame = -1 * INTERVAL_SAVE_IMAGE;
+
+// This config file will be read from init_config() function
+size_t MAX_IDS;
+int INTERVAL_SAVE_IMAGE;
+int THRESHOLD_SAVE_IMAGE; // Save image when object_id = 3 -> Decrese False Positive
+int PREVIOUS_FRAME;
 
 gint g_gpu_id = 0;
 NvBufSurface* g_inter_buf = nullptr;
@@ -242,7 +245,7 @@ cv::Mat* get_opencv_mat(NvBufSurface& ip_surf, gint idx,
 static GstPadProbeReturn
 nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
 {
-    static std::unordered_map<int, bool> recent_ids;
+    static std::unordered_map<int, int> recent_ids;
     static std::queue<int> id_queue;
 
     GstBuffer* buf = (GstBuffer*)info->data;
@@ -278,15 +281,14 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
 
             int object_id = obj_meta->object_id;
 
-            // Nếu object_id đã tồn tại, bỏ qua
-            if (recent_ids.find(object_id) != recent_ids.end())
-                continue;
+            // If object_id have not exist, insert to queue
+            if (recent_ids.find(object_id) == recent_ids.end())
+                id_queue.push(object_id);
 
-            // Thêm ID mới vào map và queue
-            recent_ids[object_id] = true;
-            id_queue.push(object_id);
+            // Increase the count for this object_id
+            recent_ids[object_id] += 1;
 
-            // Nếu số lượng ID vượt quá MAX_IDS, xóa ID lâu nhất
+            // If the number of IDs exceeds MAX_IDS, remove the oldest ID
             if (id_queue.size() > MAX_IDS)
             {
                 int old_id = id_queue.front();
@@ -294,8 +296,10 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
                 recent_ids.erase(old_id);
             }
 
-            is_save_and_pub = true;
-            if (is_save_and_pub and frame_meta->frame_num - previous_frame >= INTERVAL_SAVE_IMAGE)
+            // Save if the count of this object_id is equal to 3
+            if (recent_ids[object_id] == THRESHOLD_SAVE_IMAGE)
+                is_save_and_pub = true;
+            if (is_save_and_pub and frame_meta->frame_num - PREVIOUS_FRAME >= INTERVAL_SAVE_IMAGE)
             {
                 // Setting publish to Kafka broker
                 strncpy(obj_meta->obj_label, image_path.c_str(), sizeof(obj_meta->obj_label) - 1);
@@ -303,9 +307,9 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
             }
         }
 
-        if (is_save_and_pub and frame_meta->frame_num - previous_frame >= INTERVAL_SAVE_IMAGE)
+        if (is_save_and_pub and frame_meta->frame_num - PREVIOUS_FRAME >= INTERVAL_SAVE_IMAGE)
         {
-            previous_frame = frame_meta->frame_num;
+            PREVIOUS_FRAME = frame_meta->frame_num;
 
             /*Main Function Call */
             g_print("Save image: %s\n", image_path.c_str());
@@ -363,6 +367,13 @@ nvdsosd_src_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer ctx)
 void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_path)
 {
     YAML::Node config = YAML::LoadFile(deepstream_config_file_path);
+
+    // Read common setting
+    YAML::Node common = config["common"];
+    MAX_IDS = common["max-ids"].as<size_t>();
+    INTERVAL_SAVE_IMAGE = common["interval-save-image"].as<int>();
+    THRESHOLD_SAVE_IMAGE = common["threshold-save-image"].as<int>();
+    PREVIOUS_FRAME = -1 * INTERVAL_SAVE_IMAGE;
 
     // This is for source node =================================================
     YAML::Node source = config["source"];
@@ -553,9 +564,13 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
             RTSPSinkBin *rtsp_sink_bin = new RTSPSinkBin();
             setup_rtsp_sink_bin(rtsp_sink_bin, sink_bin, it->second["ip"].as<string>(), it->second["port"].as<int>());
         }
+        else if (key == "broker")
+        {
+            MessageBroker *msg_broker_bin = new MessageBroker();
+            setup_message_broker(msg_broker_bin, sink_bin, it->second["config"].as<string>());
+        }
     }
-    MessageBroker *msg_broker_bin = new MessageBroker();
-    setup_message_broker(msg_broker_bin, sink_bin);
+
 
     gst_bin_add(GST_BIN(g_pipeline_program->pipeline), sink_bin->bin);
     g_pipeline_program->sink_bin = sink_bin;
