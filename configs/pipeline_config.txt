@@ -1,6 +1,11 @@
+common:
+  max-ids: 100
+  interval-save-image: 18 # Best = FPS
+  threshold-save-image: 7 # Best = FPS / 3.5 - 5
+
 source:
  filesrc:
-   location: /home/ok/hai/pothole-deepstream/videos/input/pothole_dashcam_2016.mp4
+   location: /home/ok/hai/pothole-deepstream/videos/input/fromNC.mp4
   #  webcam:
   #   device: /dev/video0
 

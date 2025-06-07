@@ -1,7 +1,7 @@
 #include <gst/gst.h>
 #include "message_broker_bin.hpp"
 
-void setup_message_broker(MessageBroker *msg_broker_bin, SinkBin *sink_bin)
+void setup_message_broker(MessageBroker *msg_broker_bin, SinkBin *sink_bin, std::string config)
 {
     msg_broker_bin->bin = gst_bin_new("msgbroker-sink-bin");
 
@@ -9,8 +9,9 @@ void setup_message_broker(MessageBroker *msg_broker_bin, SinkBin *sink_bin)
     msg_broker_bin->nvmsgconv = gst_element_factory_make("nvmsgconv", "msgconv");
     msg_broker_bin->nvmsgbroker = gst_element_factory_make("nvmsgbroker", "nvmsgbroker");
 
+    g_print("Creating message broker bin with config: %s\n", config.c_str());
     g_object_set(G_OBJECT(msg_broker_bin->nvmsgconv),
-                 "config", "/home/jetson/hai/hung/DeepStream_7_KafkaMetadata/cpp_pipeline/cfg_msgconv.txt",
+                 "config", config.c_str(),
                  "payload-type", 1,
                  "comp-id", 2,
                 //  "debug-payload-dir", "./debug-payload",
