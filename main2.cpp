@@ -28,6 +28,7 @@ size_t MAX_IDS;
 int INTERVAL_SAVE_IMAGE;
 int THRESHOLD_SAVE_IMAGE; // Save image when object_id = 3 -> Decrese False Positive
 int PREVIOUS_FRAME;
+double THREHOLD_CONFIDENCE;
 
 gint g_gpu_id = 0;
 NvBufSurface *g_inter_buf = nullptr;
@@ -110,6 +111,13 @@ nvdsosd_sink_pad_buffer_probe(G_GNUC_UNUSED GstPad *pad,
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
             if (!obj_meta)
                 continue;
+            if (obj_meta->confidence < THREHOLD_CONFIDENCE)
+            {
+                obj_meta->rect_params.border_width = 0;
+                obj_meta->rect_params.has_bg_color = 0;
+                obj_meta->text_params.display_text[0] = '\0';
+                obj_meta->text_params.set_bg_clr = 0;
+            }
             gpointer color_ptr = g_hash_table_lookup(color_map, &(obj_meta->object_id));
             gfloat *color = (gfloat *)color_ptr;
 
@@ -278,7 +286,7 @@ nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer ctx)
          l_frame = l_frame->next)
     {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)(l_frame->data);
-        std::string image_path = "./images_saved/img" + std::to_string(frame_meta->frame_num) + ".jpg";
+        std::string image_path;
 
         if (!frame_meta || !frame_meta->obj_meta_list)
             continue;
@@ -289,7 +297,7 @@ nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer ctx)
              obj_list = obj_list->next)
         {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)(obj_list->data);
-            if (!obj_meta)
+            if (!obj_meta || obj_meta->confidence < THREHOLD_CONFIDENCE)
                 continue;
 
             int object_id = obj_meta->object_id;
@@ -309,9 +317,13 @@ nvdsosd_src_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer ctx)
                 recent_ids.erase(old_id);
             }
 
-            // Save if the count of this object_id is equal to 3
+            // Save if the count of this object_id is equal to THRESHOLD_SAVE_IMAGE
             if (recent_ids[object_id] == THRESHOLD_SAVE_IMAGE)
+            {
                 is_save_and_pub = true;
+                image_path = "./images_saved/img" + std::to_string(frame_meta->frame_num) + "_" + std::to_string(object_id) + ".jpg";
+            }
+
             if (is_save_and_pub and frame_meta->frame_num - PREVIOUS_FRAME >= INTERVAL_SAVE_IMAGE)
             {
                 // Setting publish to Kafka broker
@@ -398,6 +410,7 @@ void init_config(Pipeline *g_pipeline_program, string deepstream_config_file_pat
     MAX_IDS = common["max-ids"].as<size_t>();
     INTERVAL_SAVE_IMAGE = common["interval-save-image"].as<int>();
     THRESHOLD_SAVE_IMAGE = common["threshold-save-image"].as<int>();
+    THREHOLD_CONFIDENCE = common["threshold-confidence"].as<double>();
     PREVIOUS_FRAME = -1 * INTERVAL_SAVE_IMAGE;
 
     // This is for source node =================================================
