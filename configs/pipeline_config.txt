@@ -2,7 +2,7 @@ common:
   max-ids: 100
   interval-save-image: 25 # Best = 4 * FPS /5
   threshold-save-image: 7 # Best = FPS / 3.5 - 5
-  threshold-confidence: 0.45
+  threshold-confidence: 0.55
 source:
  filesrc:
    location: /home/ok/hai/pothole-deepstream/videos/input/fromNC.mp4
