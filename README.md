@@ -1,6 +1,6 @@
 # Deepstream YOLOv11
 
-This repo is used for DUT science research contest. Using Deepstream and target highest performance on Jetson Nano.
+This repo is used for the DUT science research contest. Using DeepStream and targeting the highest performance on Jetson Nano.
 
 Output Results - Frame with ROI
 ![Output Frame with ROI](assets/img700.jpg)
@@ -13,7 +13,7 @@ DeepStream Pipeline (Exported from GST DOT FILE)
 
 ## Installation
 
-Refer for setting up clone by ubuntu: https://www.geeksforgeeks.org/how-to-clone-a-repository-from-gitlab/
+Refer for setting up a clone by Ubuntu: https://www.geeksforgeeks.org/how-to-clone-a-repository-from-gitlab/
 
 ```bash
 git clone git@github.com:haiton266/deepstream-project.git
@@ -26,11 +26,11 @@ sudo apt install libyaml-cpp-dev
 sudo apt-get install libgstrtspserver-1.0
 ```
 
-If you install ok, I comment line 1 in CmakeLists.txt else need clone and build each time
+If you install ok, I comment line 1 in CmakeLists.txt otherwise, you need to clone and build each time
 
-Modify DS version in CmakeLists.txt
+Modify DS version in CMakeLists.txt
 
-Debug by exporting pipeline image (make sure install graphviz)
+Debug by exporting pipeline image (make sure to install Graphviz)
 ```bash
 dot -Tpng debug/pipeline.dot -o debug/pipeline.png
 dot -Tpng debug/bin.dot -o debug/bin.png
@@ -50,7 +50,7 @@ The `kafka_consumer.py` script listens for new pothole detection events from a K
 2. Reads the associated pothole image.
 3. Sends the data to a cloud server via a REST API for map updates.
 
-### 📂 Ipynb in Google Colab related to Data and AI
+### 📂 Some useful Ipynb files run by Google Colab related to Data and AI
 
 | Notebook  | Link |
 |-----------|------|
