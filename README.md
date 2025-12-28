@@ -26,7 +26,7 @@ sudo apt install libyaml-cpp-dev
 sudo apt-get install libgstrtspserver-1.0
 ```
 
-If you install ok, I comment line 1 in CmakeLists.txt otherwise, you need to clone and build each time
+If you install ok, I commented line 1 in CmakeLists.txt otherwise, you need to clone and build each time
 
 Modify DS version in CMakeLists.txt
 
@@ -59,3 +59,10 @@ The `kafka_consumer.py` script listens for new pothole detection events from a K
 | Process data Kaggle Pothole | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1yxJNHxrcL7UKLGlrL16cSXgr6nXKtYhW#scrollTo=TAyC6py8K4bx) |
 | Test YOLO | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1YCGI9db6zX54XI6ZZo55jC0nyoXe7uCY?usp=sharing) |
 | Youtube_pothole_dataset_upload_roboflow | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1wsQZyXeLhr-54hV26Nu9JXvd0hgF4faa?usp=sharing) |
+
+
+### Dataset
+- https://universe.roboflow.com/htcolab2/pothole_kaggle-xy7ja/browse?queryText=&pageSize=50&startingIndex=0&browseQuery=true
+- https://universe.roboflow.com/demo-tracking
+
+Note: The two links above include some data trained for this project. However, since there is no good management, it's complex, you should filter and process the best for you
